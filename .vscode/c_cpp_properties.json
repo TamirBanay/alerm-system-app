@@ -1,0 +1,19 @@
+{
+    "configurations": [
+        {
+            "name": "Win32",
+            "includePath": [
+                "C:/Users/YOUR_USERNAME/AppData/Local/Arduino15/packages/esp8266/hardware/esp8266/2.7.4/**",
+                "C:/Program Files (x86)/Arduino/libraries/**"
+            ],
+            "forcedInclude": [
+                "C:/Users/YOUR_USERNAME/AppData/Local/Arduino15/packages/esp8266/hardware/esp8266/2.7.4/cores/esp8266/Arduino.h"
+            ],
+            "intelliSenseMode": "gcc-x64",
+            "compilerPath": "C:/Program Files (x86)/Arduino/hardware/tools/avr/bin/avr-gcc.exe",
+            "cStandard": "c11",
+            "cppStandard": "c++11"
+        }
+    ],
+    "version": 4
+}
