@@ -10,7 +10,7 @@
 WiFiUDP ntpUDP;
 // Adjust the NTP client's time offset to match Israel's timezone
 // For Standard Time (UTC+2) use 7200, for Daylight Saving Time (UTC+3) use 10800
-NTPClient timeClient(ntpUDP, "pool.ntp.org", 10800);
+NTPClient timeClient(ntpUDP, "pool.ntp.org", 7200);
 
 #define EEPROM_SIZE 512
 #define CITY_ADDRESS 0
