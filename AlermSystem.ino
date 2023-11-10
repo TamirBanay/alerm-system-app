@@ -41,8 +41,8 @@ void setup()
   WiFi.mode(WIFI_STA);
   WiFi.disconnect(); // You can also comment this out if you want to auto-reconnect
 
-
- if (MDNS.begin("alermsystem")) {// the localHost address is in - > http://alermsystem.local/
+  if (MDNS.begin("alermsystem"))
+  { // the localHost address is in - > http://alermsystem.local/
     Serial.println("mDNS responder started");
   }
   // This will attempt to connect using stored credentials
@@ -74,40 +74,61 @@ void setup()
 
   server.on("/", HTTP_GET, [&]()
             {
-        String form = "<!DOCTYPE html><html lang='he'><head><meta charset='UTF-8'></head><body>"
-                      "<h1>Current target city: " + targetCity + "</h1>"
-                      "<form action='/setcity' method='get'>"
-                      "Enter new target city: <input type='text' name='city'><br>"
-                      "<input type='submit' value='Submit'>"
-                      "</form>"
-                      "</body></html>";
-        server.send(200, "text/html", form); });
+  String form = "<!DOCTYPE html><html lang='he'><head><meta charset='UTF-8'>"
+                "<style>"
+                "body { font-family: Arial, sans-serif; background-color: #f8f8f8; text-align: center; }"
+                "h1 { color: #333; margin-top: 50px; }"
+                "form { max-width: 300px; margin: 50px auto 0 auto; padding: 1em; background: #fff; border-radius: 1em; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }"
+                "input[type='text'], input[type='submit'] { width: 90%; padding: 0.7em; margin: 0.5em 0; border-radius: 0.5em; border: 1px solid #ddd; box-sizing: border-box; }"
+                "input[type='submit'] { background: #007bff; color: white; font-weight: bold; border: none; cursor: pointer; }"
+                "input[type='submit']:hover { background: #0056b3; }"
+                "</style>"
+                "</head><body>"
+                "<h1>Current target city: " + targetCity + "</h1>"
+                "<form action='/setcity' method='get'>"
+                "Enter new target city: <input type='text' name='city'><br>"
+                "<input type='submit' value='Submit'>"
+                "</form>"
+                "</body></html>";
+  server.send(200, "text/html", form); });
 
   server.on("/setcity", HTTP_GET, [&]()
             {
-        if (server.hasArg("city")) {
-            targetCity = urlDecode(server.arg("city"));
-            Serial.print("Updated target city: ");
-            printAsUtf8(targetCity); // Debug print
+    if (server.hasArg("city")) {
+        targetCity = urlDecode(server.arg("city"));
+        Serial.print("Updated target city: ");
+        printAsUtf8(targetCity); // Debug print
 
-            size_t cityLength = targetCity.length() + 1; // +1 for null terminator
-            if (cityLength > sizeof(storedCity)) {
-                server.send(500, "text/plain", "City name is too long!");
-                return;
-            }
+        size_t cityLength = targetCity.length() + 1; // +1 for null terminator
+        if (cityLength > sizeof(storedCity)) {
+            String response = "<!DOCTYPE html><html lang='he'><head><meta charset='UTF-8'><title>Update Error</title></head><body>"
+                              "<h2 style='color: red;'>Error: City name is too long!</h2>"
+                              "<a href='/' style='display:inline-block;margin-top:20px;padding:10px;background-color:#007bff;color:white;text-decoration:none;border-radius:5px;'>Return</a>"
+                              "</body></html>";
+            server.send(500, "text/html", response);
+            return;
+        }
 
-            memset(storedCity, 0, sizeof(storedCity)); // Clear buffer
-            targetCity.toCharArray(storedCity, sizeof(storedCity)); // Convert to char array
-            for (unsigned int i = 0; i < cityLength; ++i) {
-                EEPROM.write(CITY_ADDRESS + i, storedCity[i]);
-            }
-            EEPROM.commit();
+        memset(storedCity, 0, sizeof(storedCity)); // Clear buffer
+        targetCity.toCharArray(storedCity, sizeof(storedCity)); // Convert to char array
+        for (unsigned int i = 0; i < cityLength; ++i) {
+            EEPROM.write(CITY_ADDRESS + i, storedCity[i]);
+        }
+        EEPROM.commit();
 
-            server.send(200, "text/html", "<p>Target city set to: " + targetCity + "</p><a href=\"/\">Return</a>");
-            Serial.println("Target city updated to: " + targetCity);
-        } else {
-            server.send(400, "text/plain", "City parameter missing");
-        } });
+        String response = "<!DOCTYPE html><html lang='he'><head><meta charset='UTF-8'><title>City Updated</title></head><body>"
+                          "<h2 style='color: green;'>Target city set to: " + targetCity + "</h2>"
+                          "<a href='/' style='display:inline-block;margin-top:20px;padding:10px;background-color:#007bff;color:white;text-decoration:none;border-radius:5px;'>Return</a>"
+                          "</body></html>";
+        server.send(200, "text/html", response);
+        Serial.println("Target city updated to: " + targetCity);
+    } else {
+        String response = "<!DOCTYPE html><html lang='he'><head><meta charset='UTF-8'><title>Update Error</title></head><body>"
+                          "<h2 style='color: red;'>Error: City parameter missing</h2>"
+                          "<a href='/' style='display:inline-block;margin-top:20px;padding:10px;background-color:#007bff;color:white;text-decoration:none;border-radius:5px;'>Return</a>"
+                          "</body></html>";
+        server.send(400, "text/html", response);
+    } });
 
   server.begin(); // Start the web server
 }
