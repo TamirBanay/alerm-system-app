@@ -36,6 +36,11 @@ void setup()
   pinMode(alertIndicatorPin, OUTPUT);
 
   WiFiManager wifiManager;
+  // wifiManager.resetSettings(); // Comment this out to prevent resetting WiFi settings
+  WiFi.mode(WIFI_STA);
+  // WiFi.disconnect(); // You can also comment this out if you want to auto-reconnect
+
+
   // This will attempt to connect using stored credentials
   if (!wifiManager.autoConnect("Alerm System"))
   {
@@ -171,14 +176,12 @@ void loop()
       String payload = http.getString();
       Serial.println("Server response:");
       Serial.println(payload);
-      Serial.println("Hereeeeee1");
       Serial.print("Current time: ");
       Serial.println(timeClient.getFormattedTime());
 
       if (payload.startsWith("\xEF\xBB\xBF"))
       {
         payload = payload.substring(3); // Remove BOM
-        Serial.println("Hereeeeee2");
         Serial.println("the targetCity: " + targetCity);
       }
 
@@ -194,7 +197,6 @@ void loop()
         serializeJson(dataArray, jsonArrayAsString);
         // Now print the string
         Serial.println("dataArray: " + jsonArrayAsString);
-        Serial.println("Hereeeeee3");
 
         bool alertDetected = false;
 
@@ -207,7 +209,6 @@ void loop()
             Serial.println("alertDetected is change to: " + alertDetected);
             break;
           }
-          Serial.println("Hereeeeee4");
         }
 
         if (alertDetected)
@@ -220,7 +221,6 @@ void loop()
             delay(500); // Alert on for 500ms
             digitalWrite(alertIndicatorPin, LOW);
             digitalWrite(buzzerPin, LOW);
-            Serial.println("Hereeeeee5");
 
             delay(500); // Alert off for 500ms
           }
@@ -234,15 +234,12 @@ void loop()
       {
         Serial.print("deserializeJson() failed: ");
         Serial.println(error.c_str());
-        Serial.println("Hereeeeee6");
       }
     }
     else
     {
       Serial.print("HTTP request failed, error: ");
       Serial.println(http.errorToString(httpCode));
-
-      Serial.println("Hereeeeee7");
     }
     http.end();
   }
