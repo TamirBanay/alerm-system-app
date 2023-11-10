@@ -6,6 +6,7 @@
 #include <EEPROM.h>
 #include <NTPClient.h>
 #include <WiFiUdp.h>
+#include <ESP8266mDNS.h>
 
 WiFiUDP ntpUDP;
 // Adjust the NTP client's time offset to match Israel's timezone
@@ -36,11 +37,14 @@ void setup()
   pinMode(alertIndicatorPin, OUTPUT);
 
   WiFiManager wifiManager;
-  // wifiManager.resetSettings(); // Comment this out to prevent resetting WiFi settings
+  wifiManager.resetSettings(); // Comment this out to prevent resetting WiFi settings
   WiFi.mode(WIFI_STA);
-  // WiFi.disconnect(); // You can also comment this out if you want to auto-reconnect
+  WiFi.disconnect(); // You can also comment this out if you want to auto-reconnect
 
 
+ if (MDNS.begin("alermsystem")) {// the localHost address is in - > http://alermsystem.local/
+    Serial.println("mDNS responder started");
+  }
   // This will attempt to connect using stored credentials
   if (!wifiManager.autoConnect("Alerm System"))
   {
@@ -154,6 +158,7 @@ String getAlertTypeByCategory(const char *category)
 void loop()
 {
   server.handleClient(); // Handle client requests
+  MDNS.update();
 
   if (WiFi.status() == WL_CONNECTED)
   {

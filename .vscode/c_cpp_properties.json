@@ -45,7 +45,8 @@
                 "C:\\Users\\user\\AppData\\Local\\Arduino15\\packages\\esp8266\\hardware\\esp8266\\3.1.1\\libraries\\ESP8266WebServer\\src",
                 "C:\\Users\\user\\AppData\\Local\\Arduino15\\packages\\esp8266\\hardware\\esp8266\\3.1.1\\libraries\\DNSServer\\src",
                 "C:\\Users\\user\\AppData\\Local\\Arduino15\\packages\\esp8266\\hardware\\esp8266\\3.1.1\\libraries\\EEPROM",
-                "C:\\Users\\user\\OneDrive - Sapir College\\Documents\\Arduino\\libraries\\NTPClient"
+                "C:\\Users\\user\\OneDrive - Sapir College\\Documents\\Arduino\\libraries\\NTPClient",
+                "C:\\Users\\user\\AppData\\Local\\Arduino15\\packages\\esp8266\\hardware\\esp8266\\3.1.1\\libraries\\ESP8266mDNS\\src"
             ],
             "forcedInclude": [
                 "C:\\Users\\user\\AppData\\Local\\Arduino15\\packages\\esp8266\\hardware\\esp8266\\3.1.1\\cores\\esp8266\\Arduino.h"
