@@ -132,49 +132,6 @@ void setup()
 
   server.begin(); // Start the web server
 }
-String getAlertTypeByCategory(const char *category)
-{
-  if (!category)
-  {
-    return "missiles";
-  }
-
-  int cat = atoi(category); // Convert string to integer
-
-  switch (cat)
-  {
-  case 1:
-    return "missiles";
-  case 4:
-    return "radiologicalEvent";
-  case 3:
-    return "earthQuake";
-  case 5:
-    return "tsunami";
-  case 6:
-    return "hostileAircraftIntrusion";
-  case 7:
-    return "hazardousMaterials";
-  case 13:
-    return "terroristInfiltration";
-  case 101:
-    return "missilesDrill";
-  case 103:
-    return "earthQuakeDrill";
-  case 104:
-    return "radiologicalEventDrill";
-  case 105:
-    return "tsunamiDrill";
-  case 106:
-    return "hostileAircraftIntrusionDrill";
-  case 107:
-    return "hazardousMaterialsDrill";
-  case 113:
-    return "terroristInfiltrationDrill";
-  default:
-    return "unknown";
-  }
-}
 
 void loop()
 {
