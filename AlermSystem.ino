@@ -36,7 +36,7 @@ void setup()
   WiFiManager wifiManager;
   // wifiManager.resetSettings(); // Comment this out to prevent resetting WiFi settings
   WiFi.mode(WIFI_STA);
-  WiFi.disconnect(); // You can also comment this out if you want to auto-reconnect
+  // WiFi.disconnect(); // You can also comment this out if you want to auto-reconnect
 
   if (MDNS.begin("alermsystem"))
   { // the localHost address is in - > http://alermsystem.local/
