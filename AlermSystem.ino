@@ -12,17 +12,14 @@ WiFiUDP ntpUDP;
 // Adjust the NTP client's time offset to match Israel's timezone
 // For Standard Time (UTC+2) use 7200, for Daylight Saving Time (UTC+3) use 10800
 NTPClient timeClient(ntpUDP, "pool.ntp.org", 7200);
+ESP8266WebServer server(80);
 
 #define EEPROM_SIZE 512
 #define CITY_ADDRESS 0
-
-ESP8266WebServer server(80);
 const char *apiUrl = "https://www.oref.org.il/WarningMessages/alert/alerts.json";
-
 const int buzzerPin = 2;
 const int wifiIndicatorPin = 5;
 const int alertIndicatorPin = 16;
-
 String targetCity;    // This will be loaded from EEPROM
 char storedCity[100]; // Declare storedCity globally
 
@@ -37,7 +34,7 @@ void setup()
   pinMode(alertIndicatorPin, OUTPUT);
 
   WiFiManager wifiManager;
-  wifiManager.resetSettings(); // Comment this out to prevent resetting WiFi settings
+  // wifiManager.resetSettings(); // Comment this out to prevent resetting WiFi settings
   WiFi.mode(WIFI_STA);
   WiFi.disconnect(); // You can also comment this out if you want to auto-reconnect
 
@@ -229,6 +226,7 @@ void loop()
   else
   {
     Serial.println("Disconnected from WiFi. Trying to reconnect...");
+    digitalWrite(wifiIndicatorPin, LOW);
   }
   delay(1000); // Wait for 10 seconds before next check
 }
