@@ -199,7 +199,7 @@ void handleRoot()
                 "<input type='submit' value='Submit'>"
                 "</form>"
                 "<h4> Go to that link, find you location alerm and copy, then paste it on the Target city.</h4>"
-                "<a href = 'https://www.oref.org.il/Shared/Ajax/GetCitiesMix.aspx?lang=he'>Choose city</a>"
+                "<a href = 'https://alerm-script.onrender.com/cities'>Choose city</a>"
                 "</body></html>";
   server.send(200, "text/html", form); });
 
