@@ -143,10 +143,55 @@ void handleRoot()
     <meta charset='UTF-8'>
     <title>Cities</title>
     <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 20px;
+            color: #333;
+        }
+        h1 {
+            text-align: center;
+            color: #444;
+        }
         #filterInput {
-            margin-bottom: 20px;
+            display: block;
+            margin: 20px auto;
             padding: 10px;
-            width: calc(90% - 22px);
+            width: 90%;
+            max-width: 500px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        #cityForm {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        .city-label {
+            display: block;
+            margin: 10px 0;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #ddd; /* Divider between cities */
+            cursor: pointer;
+        }
+        /* Last city label should not have a divider */
+        .city-label:last-child {
+            border-bottom: none;
+        }
+        input[type="submit"] {
+            display: block;
+            background-color: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            margin: 20px auto;
+            cursor: pointer;
+        }
+        input[type="submit"]:hover {
+            background-color: #0056b3;
         }
     </style>
 </head>
@@ -161,7 +206,7 @@ void handleRoot()
         document.getElementById('cityForm').onsubmit = function(event) {
             event.preventDefault();
             var checkedBoxes = document.querySelectorAll('input[name=city]:checked');
-            var targetCities = Array.from(checkedBoxes).map(function(box) { return box.value; });
+            var targetCities = Array.from(checkedBoxes).map(box => box.value);
             fetch('/save-cities', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -179,34 +224,30 @@ void handleRoot()
 
         document.getElementById('filterInput').oninput = function() {
             var filter = this.value.toUpperCase();
-            var labels = document.getElementById('cityList').getElementsByTagName('label');
-            Array.from(labels).forEach(function(label) {
+            var labels = document.querySelectorAll('.city-label');
+            labels.forEach(label => {
                 var text = label.textContent || label.innerText;
-                if (text.toUpperCase().indexOf(filter) > -1) {
-                    label.style.display = '';
-                } else {
-                    label.style.display = 'none';
-                }
+                label.style.display = text.toUpperCase().includes(filter) ? '' : 'none';
             });
         };
 
         fetch('https://alerm-script.onrender.com/citiesjson')
-        .then(function(response) { return response.json(); })
-        .then(function(cities) {
+        .then(response => response.json())
+        .then(cities => {
             var cityListContainer = document.getElementById('cityList');
-            cities.forEach(function(city) {
+            cities.forEach(city => {
                 var label = document.createElement('label');
+                label.classList.add('city-label');
                 var checkbox = document.createElement('input');
                 checkbox.type = 'checkbox';
                 checkbox.name = 'city';
                 checkbox.value = city;
                 label.appendChild(checkbox);
-                label.appendChild(document.createTextNode(city));
-                label.appendChild(document.createElement('br'));
+                label.appendChild(document.createTextNode(` ${city}`));
                 cityListContainer.appendChild(label);
             });
         })
-        .catch(function(error) {
+        .catch(error => {
             console.error('Error fetching the cities:', error);
         });
     </script>
@@ -218,17 +259,91 @@ void handleRoot()
 
 void handleDisplaySavedCities()
 {
-  // Ensure this variable is globally declared and populated correctly
-  Serial.println("Saved cities JSON: " + savedCitiesJson); // For debugging
+  // Parse the JSON
+  DynamicJsonDocument doc(1024); // Adjust the size of the document as necessary
+  deserializeJson(doc, savedCitiesJson);
 
-  // Start the HTML response
-  String responseHtml = "<!DOCTYPE html><html lang='en'><head><meta charset='UTF-8'><title>Selected Cities</title></head><body>";
-  responseHtml += "<h1>Selected Cities</h1><ul>" + savedCitiesJson;
+  // If savedCitiesJson is an object with a "cities" key, access it like this
+  JsonArray cities = doc["cities"].as<JsonArray>();
 
-  // End the HTML response
-  responseHtml += "</ul><a href='/'><button>Return</button></a></body></html>";
+  // Start building the HTML response with enhanced design
+  String responseHtml = R"(
+<!DOCTYPE html>
+<html lang='en'>
+<head>
+    <meta charset='UTF-8'>
+    <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+    <title>Selected Cities</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #e9ecef;
+            color: #495057;
+            margin: 0;
+            padding: 20px;
+        }
+        h1 {
+            text-align: center;
+            color: #212529;
+        }
+        ul {
+            list-style-type: none;
+            padding: 0;
+        }
+        li {
+            background-color: white;
+            margin: 10px 0;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s;
+        }
+        li:hover {
+            transform: translateY(-2px);
+        }
+        button {
+            display: block;
+            width: 200px;
+            padding: 10px;
+            margin: 20px auto;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.2s;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        @media (max-width: 768px) {
+            button {
+                width: auto;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>Selected Cities</h1>
+    <ul>
+)";
 
-  // Send the response
+  // Add each city to the HTML list with enhanced design
+  for (JsonVariant city : cities)
+  {
+    responseHtml += "<li>" + city.as<String>() + "</li>";
+  }
+
+  // End the HTML response with enhanced design
+  responseHtml += R"(
+    </ul>
+    <a href='/'><button>Return</button></a>
+</body>
+</html>
+)";
+
+  // Send the response with enhanced design
   server.send(200, "text/html", responseHtml);
 }
 
@@ -263,6 +378,7 @@ void anAlarmSounds()
 
 void handleSaveCities()
 {
+
   if (server.hasArg("plain"))
   {
     String requestBody = server.arg("plain");
@@ -283,6 +399,7 @@ void handleSaveCities()
     server.send(400, "text/plain", "Bad Request");
   }
 }
+
 // Load cities from EEPROM
 void loadCitiesFromEEPROM()
 {
