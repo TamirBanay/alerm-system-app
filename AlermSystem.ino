@@ -1,72 +1,146 @@
 #include <ESP8266WiFi.h>
-#include <WiFiManager.h>
-#include <ESP8266mDNS.h>
-#include <EEPROM.h>
-#include <WiFiClientSecure.h>
-#include <EEPROM.h>
-#include <ArduinoJson.h>
-#include <FS.h>
 #include <ESP8266HTTPClient.h>
+#include <ArduinoJson.h>
+#include <WiFiManager.h> // Include the WiFiManager library
+#include <ESP8266WebServer.h>
+#include <EEPROM.h>
+#include <NTPClient.h>
+#include <WiFiUdp.h>
+#include <ESP8266mDNS.h>
 
-// Function prototypes
-void loadCitiesFromEEPROM();
-void handleRoot();
-void handleSaveCities();
-void handleDisplaySavedCities();
-void connectToAlertServer();
-void anAlarmSounds();
-void checkCitiesAndActiveAlermIfItsMach(String payload);
+WiFiUDP ntpUDP;
+// Adjust the NTP client's time offset to match Israel's timezone
+// For Standard Time (UTC+2) use 7200, for Daylight Saving Time (UTC+3) use 10800
+NTPClient timeClient(ntpUDP, "pool.ntp.org", 7200);
 ESP8266WebServer server(80);
+
 #define EEPROM_SIZE 512
 #define CITY_ADDRESS 0
 
-// Global variable
-String savedCitiesJson;
+const char *apiUrl = "https://www.oref.org.il/WarningMessages/alert/alerts.json";
 const int buzzerPin = 2;
 const int wifiIndicatorPin = 5;
 const int alertIndicatorPin = 16;
-const int serverConnection = 13;
-const char *apiUrlAlert = "https://alerm-script.onrender.com/get-alerts";
+String targetCity;    // This will be loaded from EEPROM
+char storedCity[100]; // Declare storedCity globally
+String savedCitiesJson; // This should be a valid JSON string.
+
 void setup()
 {
   Serial.begin(115200);
-  EEPROM.begin(EEPROM_SIZE);
-
-  // Initialize SPIFFS
-  if (!SPIFFS.begin())
-  {
-    Serial.println("Failed to mount file system");
-    return;
-  }
-
-  // List all files in SPIFFS (for debugging purposes)
-  Dir dir = SPIFFS.openDir("/");
-  while (dir.next())
-  {
-    String fileName = dir.fileName();
-    size_t fileSize = dir.fileSize();
-    Serial.printf("FS File: %s, size: %s\n", fileName.c_str(), String(fileSize).c_str());
-  }
-
-  // Initialize other components
+  EEPROM.begin(EEPROM_SIZE); // Initialize EEPROM to store 'targetCity'
+  timeClient.begin();
   pinInit();
+  server.on("/", HTTP_GET, handleRoot);
+  server.on("/save-cities", HTTP_POST, handleSaveCities);
+  server.on("/save-cities", HTTP_GET, handleDisplaySavedCities); 
   wifiConfigAndMDNS();
-  loadCitiesFromEEPROM();
+  savedCitiesJson = loadCitiesFromEEPROM();
+  server.begin();
 
   Serial.println("Connected to WiFi");
   digitalWrite(wifiIndicatorPin, HIGH);
-
-  // Set up the web server routes
-  server.on("/", HTTP_GET, handleRoot);
-  server.on("/save-cities", HTTP_POST, handleSaveCities);
-  server.on("/save-cities", HTTP_GET, handleDisplaySavedCities);
-  server.begin(); // Start the ESP8266 web server
 }
+
 void loop()
 {
-  connectToAlertServer();
   server.handleClient(); // Handle client requests
   MDNS.update();
+
+  if (WiFi.status() == WL_CONNECTED)
+  {
+    HTTPClient http;
+    WiFiClientSecure client;
+    client.setInsecure(); // Disable SSL/TLS certificate validation
+    http.begin(client, apiUrl);
+    http.addHeader("Referer", "https://www.oref.org.il/11226-he/pakar.aspx");
+    http.addHeader("X-Requested-With", "XMLHttpRequest");
+    http.addHeader("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.100 Safari/537.36");
+    timeClient.update();
+
+    int httpCode = http.GET();
+
+    Serial.print("HTTP Status Code: ");
+    Serial.println(httpCode);
+
+    if (httpCode == 200)
+    {
+      String payload = http.getString();
+      Serial.println("Server response:");
+      Serial.println(payload);
+      Serial.print("Current time: ");
+      Serial.println(timeClient.getFormattedTime());
+
+      if (payload.startsWith("\xEF\xBB\xBF"))
+      {
+        payload = payload.substring(3); // Remove BOM
+        Serial.println("the targetCity: " + targetCity);
+      }
+
+      DynamicJsonDocument doc(4096); // Increase buffer size
+      DeserializationError error = deserializeJson(doc, payload);
+
+      if (!error)
+      {
+        JsonArray dataArray = doc["data"].as<JsonArray>();
+        // Create an empty string to hold the serialized JSON
+        String jsonArrayAsString;
+        // Serialize the JsonArray to a string
+        serializeJson(dataArray, jsonArrayAsString);
+        // Now print the string
+        Serial.println("dataArray: " + jsonArrayAsString);
+
+        bool alertDetected = false;
+
+        for (String city : dataArray)
+        {
+          Serial.println(city + " comper with " + targetCity);
+          if (city.equals(targetCity))
+          {
+            alertDetected = true;
+            Serial.println("alertDetected is change to: " + alertDetected);
+            break;
+          }
+        }
+
+        if (alertDetected)
+        {
+          Serial.println("Triggering alarm...");
+          for (int i = 0; i < 10; i++)
+          {
+            digitalWrite(alertIndicatorPin, HIGH);
+            digitalWrite(buzzerPin, HIGH);
+            delay(500); // Alert on for 500ms
+            digitalWrite(alertIndicatorPin, LOW);
+            digitalWrite(buzzerPin, LOW);
+
+            delay(500); // Alert off for 500ms
+          }
+        }
+        else
+        {
+          Serial.println("No alert for target city.");
+        }
+      }
+      else
+      {
+        Serial.print("deserializeJson() failed: ");
+        Serial.println(error.c_str());
+      }
+    }
+    else
+    {
+      Serial.print("HTTP request failed, error: ");
+      Serial.println(http.errorToString(httpCode));
+    }
+    http.end();
+  }
+  else
+  {
+    Serial.println("Disconnected from WiFi. Trying to reconnect...");
+    digitalWrite(wifiIndicatorPin, LOW);
+  }
+  delay(1000); // Wait for 10 seconds before next check
 }
 
 void pinInit()
@@ -74,70 +148,45 @@ void pinInit()
   pinMode(buzzerPin, OUTPUT);
   pinMode(wifiIndicatorPin, OUTPUT);
   pinMode(alertIndicatorPin, OUTPUT);
-  pinMode(serverConnection, OUTPUT);
 }
 void wifiConfigAndMDNS()
 {
   WiFiManager wifiManager;
   WiFi.mode(WIFI_STA);
+  // wifiManager.resetSettings(); // Comment this out to prevent resetting WiFi settings
+  // WiFi.disconnect(); // You can also comment this out if you want to auto-reconnect
 
   if (MDNS.begin("alermsystem"))
-  { // Start the mDNS responder for alermsystem.local
+  { // the localHost address is in - > http://alermsystem.local/
     Serial.println("mDNS responder started");
   }
-
   // This will attempt to connect using stored credentials
   if (!wifiManager.autoConnect("Alerm System"))
   {
     Serial.println("Failed to connect and hit timeout");
-    ESP.restart(); // Restart the ESP if connection fails
+    // If connection fails, it restarts the ESP
+    ESP.restart();
     delay(1000);
   }
 
-  // Now we will load the JSON array of cities from EEPROM
-  loadCitiesFromEEPROM(); // Call the function that loads cities from EEPROM
-  // If no saved cities were found, we can set a default value or leave it empty
-  if (savedCitiesJson.isEmpty())
-  {
-    savedCitiesJson = "[]"; // Default to an empty JSON array if needed
-    Serial.println("No saved cities in EEPROM, using default empty array.");
-  }
-}
-
-void connectToAlertServer()
-{
-  if (WiFi.status() == WL_CONNECTED)
-  {
-    HTTPClient http;
-    WiFiClientSecure client;         // Use WiFiClientSecure for HTTPS
-    client.setInsecure();            // Optionally, disable certificate verification
-    http.begin(client, apiUrlAlert); // Pass the WiFiClientSecure and the URL
-    int httpCode = http.GET();       // Make the request
-
-    if (httpCode > 0)
+  // Load 'targetCity' from EEPROM
+  if (EEPROM.read(CITY_ADDRESS) != 255)
+  { // Check first byte to see if it's set
+    for (unsigned int i = 0; i < sizeof(storedCity); ++i)
     {
-      digitalWrite(serverConnection, HIGH);
-      String payload = http.getString(); // Get the request response payload
-      Serial.println("Payload received: " + payload);
-      checkCitiesAndActiveAlermIfItsMach(payload);
+      storedCity[i] = EEPROM.read(CITY_ADDRESS + i);
     }
-    else
-    {
-      Serial.println("Failed to connect to alert server, HTTP code: " + String(httpCode));
-      digitalWrite(serverConnection, LOW);
-    }
-
-    http.end(); // Close connection
+    storedCity[sizeof(storedCity) - 1] = '\0'; // Ensure null-terminated string
+    targetCity = String(storedCity);
   }
   else
   {
-    Serial.println("Not connected to WiFi.");
-    digitalWrite(wifiIndicatorPin, LOW);
+    targetCity = "אשקלון - דרום"; // Default city name if EEPROM is empty
   }
 }
 
-void handleRoot()
-{
+
+void handleRoot() {
   String htmlContent = R"(
 <!DOCTYPE html>
 <html lang='en'>
@@ -151,8 +200,13 @@ void handleRoot()
             margin: 0;
             padding: 20px;
             color: #333;
+            direction: rtl; 
         }
         h1 {
+            text-align: center;
+            color: #444;
+        }
+           #myCities {
             text-align: center;
             color: #444;
         }
@@ -198,11 +252,14 @@ void handleRoot()
     </style>
 </head>
 <body>
-    <h1>Select Cities</h1>
-    <input type='text' id='filterInput' placeholder='Filter cities...'>
+    <h1>בחר איזורים מהרשימה</h1>
+    <h3  id='myCities'>
+    <a href='/save-cities'>האיזורים שלי</a>
+    <h3/>
+    <input type='text' id='filterInput' placeholder='חפש איזורים ...'>
     <form id='cityForm'>
         <div id='cityList'></div>
-        <input type='submit' value='Save Cities'>
+        <input type='submit' value='שמור ערים'>
     </form>
     <script>
         document.getElementById('cityForm').onsubmit = function(event) {
@@ -259,12 +316,10 @@ void handleRoot()
   server.send(200, "text/html", htmlContent);
 }
 
-void handleDisplaySavedCities()
-{
-  // Parse the JSON
+void handleDisplaySavedCities() {
   DynamicJsonDocument doc(1024); // Adjust the size of the document as necessary
   deserializeJson(doc, savedCitiesJson);
-
+  
   // If savedCitiesJson is an object with a "cities" key, access it like this
   JsonArray cities = doc["cities"].as<JsonArray>();
 
@@ -275,7 +330,7 @@ void handleDisplaySavedCities()
 <head>
     <meta charset='UTF-8'>
     <meta name='viewport' content='width=device-width, initial-scale=1.0'>
-    <title>Selected Cities</title>
+    <title>איזורים שנבחרו</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -283,11 +338,13 @@ void handleDisplaySavedCities()
             color: #495057;
             margin: 0;
             padding: 20px;
+            direction: rtl; 
         }
         h1 {
             text-align: center;
             color: #212529;
         }
+      
         ul {
             list-style-type: none;
             padding: 0;
@@ -327,20 +384,19 @@ void handleDisplaySavedCities()
     </style>
 </head>
 <body>
-    <h1>Selected Cities</h1>
+    <h1>איזורים שנבחרו</h1>
     <ul>
 )";
 
   // Add each city to the HTML list with enhanced design
-  for (JsonVariant city : cities)
-  {
+  for(JsonVariant city : cities) {
     responseHtml += "<li>" + city.as<String>() + "</li>";
   }
 
   // End the HTML response with enhanced design
   responseHtml += R"(
     </ul>
-    <a href='/'><button>Return</button></a>
+    <a href='/'><button>חזור</button></a>
 </body>
 </html>
 )";
@@ -349,41 +405,35 @@ void handleDisplaySavedCities()
   server.send(200, "text/html", responseHtml);
 }
 
-// Save cities to EEPROM
-void saveCitiesToEEPROM(const String &cities)
-{
-  // Clear EEPROM
-  for (int i = 0; i < EEPROM_SIZE; i++)
-  {
-    EEPROM.write(i, 0);
-  }
-  // Write cities to EEPROM
-  for (unsigned int i = 0; i < cities.length(); i++)
-  {
-    EEPROM.write(CITY_ADDRESS + i, cities[i]);
-  }
-  EEPROM.commit(); // Save changes to EEPROM
-}
-void anAlarmSounds()
-{
-  for (int i = 0; i < 5; i++)
-  {
-    digitalWrite(alertIndicatorPin, HIGH);
-    digitalWrite(buzzerPin, HIGH);
-    delay(500); // Alert on for 500ms
-    digitalWrite(alertIndicatorPin, LOW);
-    digitalWrite(buzzerPin, LOW);
 
-    delay(500); // Alert off for 500ms
+
+void saveCitiesToEEPROM(const String& data) {
+  // Make sure the data to save does not exceed the EEPROM size
+  int len = min(data.length(), (unsigned int)EEPROM_SIZE - 1);
+  for (int i = 0; i < len; ++i) {
+    EEPROM.write(i, data[i]);
   }
+  // Write the null terminator to mark the end of the string
+  EEPROM.write(len, '\0');
+  EEPROM.commit();
 }
 
-void handleSaveCities()
-{
+String loadCitiesFromEEPROM() {
+  String data;
+  for (int i = 0; i < EEPROM_SIZE; ++i) {
+    char c = EEPROM.read(i);
+    if (c == '\0') break; // Stop reading at the null terminator
+    data += c;
+  }
+  return data;
+}
 
-  if (server.hasArg("plain"))
-  {
+void handleSaveCities() {
+
+  
+  if (server.hasArg("plain")) {
     String requestBody = server.arg("plain");
+    targetCity = requestBody;
     Serial.println("Received cities to save: " + requestBody);
 
     // Save the JSON string of cities to EEPROM
@@ -395,100 +445,50 @@ void handleSaveCities()
     // Redirect to the GET route to display saved cities
     server.sendHeader("Location", "/save-cities", true);
     server.send(302, "text/plain", ""); // HTTP 302 Redirect
-  }
-  else
-  {
+  } else {
     server.send(400, "text/plain", "Bad Request");
   }
 }
-
-// Load cities from EEPROM
-void loadCitiesFromEEPROM()
+void printAsUtf8(const String &text)
 {
-  savedCitiesJson = ""; // Clear current data
-  for (unsigned int i = CITY_ADDRESS; i < EEPROM_SIZE; i++)
+  for (int i = 0; i < text.length(); i++)
   {
-    char readValue = char(EEPROM.read(i));
-    if (readValue == 0)
-    { // Null character signifies end of data
-      break;
-    }
-    savedCitiesJson += readValue; // Append to the savedCitiesJson string
-  }
-  Serial.println("Loaded cities from EEPROM: " + savedCitiesJson);
-}
-
-void checkCitiesAndActiveAlermIfItsMach(String payload)
-{
-
-  DynamicJsonDocument payloadDoc(4096);
-  DeserializationError error = deserializeJson(payloadDoc, payload);
-
-  if (!error)
-  {
-    JsonArray payloadArray = payloadDoc.as<JsonArray>();
-    Serial.println("Full Payload: ");
-    serializeJsonPretty(payloadArray, Serial);
-
-    if (!savedCitiesJson.isEmpty())
+    unsigned char c = (unsigned char)text[i];
+    if (c >= 128)
     {
-      DynamicJsonDocument savedDoc(ESP.getFreeHeap() / 2);
-      DeserializationError savedError = deserializeJson(savedDoc, savedCitiesJson);
-
-      if (!savedError)
-      {
-        JsonArray savedCities = savedDoc["cities"].as<JsonArray>();
-        Serial.println("Saved cities array: ");
-        serializeJsonPretty(savedCities, Serial);
-        Serial.println();
-
-        bool alertDetected = false;
-        for (JsonObject alertCityObject : payloadArray)
-        {
-          JsonArray alertCities = alertCityObject["cities"].as<JsonArray>();
-          for (String alertCityName : alertCities)
-          {
-            Serial.println("Checking city: " + alertCityName);
-
-            for (String savedCity : savedCities)
-            {
-              Serial.println(alertCityName + " compare with " + savedCity);
-              if (alertCityName.equals(savedCity))
-              {
-                alertDetected = true;
-                Serial.println("Alert detected for: " + savedCity);
-                break;
-              }
-            }
-            if (alertDetected)
-              break;
-          }
-          if (alertDetected)
-            break;
-        }
-
-        if (alertDetected)
-        {
-          Serial.println("Trigger alert...");
-          anAlarmSounds();
-        }
-        else
-        {
-          Serial.println("No alert for saved cities.");
-        }
-      }
-      else
-      {
-        Serial.println("Error in saved cities JSON deserialization: " + String(savedError.c_str()));
-      }
+      Serial.print("0x");
+      Serial.print(c, HEX);
+      Serial.print(" ");
     }
     else
     {
-      Serial.println("Saved cities JSON is empty or not in the correct format.");
+      Serial.write(c);
     }
   }
-  else
+  Serial.println();
+}
+
+String urlDecode(const String &text)
+{
+  String decoded = "";
+  char temp[] = "0x00";
+  for (int i = 0; i < text.length(); i++)
   {
-    Serial.println("Error in payload JSON deserialization: " + String(error.c_str()));
+    if ((text[i] == '%') && (i + 2 < text.length()))
+    {
+      temp[2] = text[i + 1];
+      temp[3] = text[i + 2];
+      decoded += (char)strtol(temp, NULL, 16);
+      i += 2;
+    }
+    else if (text[i] == '+')
+    {
+      decoded += ' ';
+    }
+    else
+    {
+      decoded += text[i];
+    }
   }
+  return decoded;
 }
