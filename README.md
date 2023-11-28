@@ -33,7 +33,9 @@ The ESP8266 is programmed to connect to the local WiFi network and continuously 
 ## Acknowledgements
 This project is dedicated to my parents and the deaf community, aiming to provide an additional layer of safety and convenience in daily life.
 
-For more information, assistance, or contributions to the project, please contact [Your Contact Information].
+For more information, assistance, or contributions to the project, please contact banay9329@gmail.com
 
 ## License
-[Specify the license under which this project is made available, if applicable]
+This project is provided "as is", without warranty of any kind, express or implied. The author(s) or contributor(s) shall not be held liable for any damages arising from the use of this software.
+
+By using this software, you acknowledge and agree to these terms.
