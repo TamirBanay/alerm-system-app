@@ -1,5 +1,0 @@
-{
-    "board": "esp8266:esp8266:generic",
-    "port": "COM3",
-    "sketch": "AlermSystem.ino"
-}

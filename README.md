@@ -1,41 +1,62 @@
-# Home Alert System
 
-## Project Overview
-This project was developed to provide a visual alert system for the deaf, particularly to assist my parents who cannot hear auditory alarms. It utilizes an ESP8266 microcontroller connected to an LED strip that lights up when a specific alert is received, such as a siren or emergency alert in the area.
 
-## How It Works
-The ESP8266 is programmed to connect to the local WiFi network and continuously monitor for alerts specific to the region set by the user. When an alert is detected, the connected LED strip is activated, providing a visual cue that an event is occurring.
+# ESP32-WROOM-DA module City Alert System
+
+## Project Description
+This project creates an ESP32-based alert system that allows users to select specific cities for monitoring alerts. It features a WiFi connection setup via WiFiManager and a local web server for city selection.
 
 ## Features
-- **WiFi Configuration**: On initial setup, the device enters WiFi configuration mode, allowing users to connect it to their home WiFi network without needing to hardcode network credentials.
-- **Dynamic City Targeting**: Users can set and change the targeted cities for which they want to receive alerts through a user-friendly web interface accessible at `http://alermsystem.local/`.
-- **Visual Alert System**: In the event of an alert, the system triggers an LED strip to flash, providing a visual indicator that can be seen throughout the house.
+- **WiFi Configuration:** Utilize WiFiManager for easy WiFi setup without hardcoding credentials.
+- **Local Server for City Selection:** A web interface to choose cities for alerts.
+- **Persistent City Storage:** Selected cities are stored in the ESP32's non-volatile memory, ensuring settings are retained across reboots.
 
-## Setting Up the Device
-1. Power on the ESP8266 module.
-2. If not previously configured, the device will enter WiFi configuration mode.
-3. Connect to the WiFi network named "Alerm System" using any WiFi-enabled device.
-4. Follow the prompts to select your home WiFi network and enter the password.
-5. Once connected to your home network, the device will exit configuration mode.
+## Hardware Requirements
+- ESP32 Module
+- WS2812B LED Strip
+- Buzzer (optional for additional alert mechanism)
 
-## Configuring Target Cities
-1. Navigate to `http://alermsystem.local/` on any web browser connected to the same network as the device.
-2. The web interface will display a list of cities with checkboxes next to them.
-3. Select the cities for which you wish to receive alerts.
-4. Submit your selection, and the device will update its monitoring to the chosen cities.
+## Hardware Connections
+### ESP32 and WS2812B LED Strip
+1. **Data Line:** Connect the data input pin of the WS2812B LED strip to GPIO 25 on the ESP32.
+2. **Power:** The WS2812B strip requires 5V power. Connect the 5V and GND lines of the LED strip to a suitable 5V power supply. Do not power the LED strip directly from the ESP32 as it may not provide sufficient current.
+3. **Common Ground:** Ensure that the GND of the ESP32 is connected to the GND of the LED strip power supply. This common ground is necessary for proper communication between the ESP32 and the LED strip.
 
-## Technical Details
-- **Microcontroller**: ESP8266
-- **Programming Language**: C++ (Arduino framework)
-- **Additional Hardware**: LED strip compatible with the ESP8266's output voltage and current requirements
-- **Third-Party Libraries**: ESP8266WiFi, ESP8266HTTPClient, ArduinoJson, WiFiManager, ESP8266WebServer, EEPROM, NTPClient, WiFiUdp
+### Buzzer
+- Connect your buzzer to GPIO 35 on the ESP32.
 
-## Acknowledgements
-This project is dedicated to my parents and the deaf community, aiming to provide an additional layer of safety and convenience in daily life.
+## Software Requirements
+- Arduino IDE
+- ESP32 Board support installed in Arduino IDE
+- Libraries: FastLED, WiFi, WiFiManager, ArduinoJson, DNSServer, WebServer
 
-For more information, assistance, or contributions to the project, please contact banay9329@gmail.com
+## Installation
+1. Clone the repository or download the source code.
+2. Open the project in Arduino IDE.
+3. Install required libraries via the Library Manager in Arduino IDE:
+   - FastLED
+   - WiFiManager
+   - ArduinoJson
+4. Select the appropriate board (ESP32) and COM port in Arduino IDE.
 
-## License
-This project is provided "as is", without warranty of any kind, express or implied. The author(s) or contributor(s) shall not be held liable for any damages arising from the use of this software.
+## Setup and Usage
+### Initial Setup
+1. Power on the ESP32 module.
+2. On the first run, ESP32 will open a WiFi Access Point (AP) named "Alerm System".
+3. Connect to this AP with any WiFi-enabled device.
 
-By using this software, you acknowledge and agree to these terms.
+### WiFi Configuration
+1. A captive portal will automatically open for WiFi configuration.
+2. Select your home or office WiFi network and enter the password.
+3. Once connected, ESP32 will save these settings and automatically connect on subsequent reboots.
+
+### Selecting Cities
+1. Access http://alerm.local/ (Need to be on the same wifi as the module) address with a web browser to open the city selection interface.
+2. The web interface lists available cities with checkboxes.
+3. Select the desired cities for monitoring and submit.
+4. The selected cities are saved in the ESP32's non-volatile memory.
+
+### Operational Behavior
+- Upon successful WiFi connection, the first LED on the strip turns green.
+- The ESP32 monitors for alerts specific to the chosen cities.
+- In case of an alert, the system activates predefined alert mechanisms (e.g., LED patterns, buzzer sound).
+
