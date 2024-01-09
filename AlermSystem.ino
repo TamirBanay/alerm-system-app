@@ -10,52 +10,58 @@
 #include <Preferences.h>
 #include <ESPmDNS.h>
 
-
-
+// Constants for LED configuration
 #define LED_PIN     25
 #define NUM_LEDS    30
 #define BRIGHTNESS  50
 #define LED_TYPE    WS2812B
 #define COLOR_ORDER GRB
+
+// Global Variables
 CRGB leds[NUM_LEDS];
 const int buzzerPin = 35;
 String targetCities[4];
 const char* apiEndpoint = "https://www.oref.org.il/WarningMessages/alert/alerts.json";
 WebServer server(80);
-String citiesList = "";
 String savedCitiesJson;
 Preferences preferences;
 
-
+// Function Declarations
 void connectToWifi();
 void handleRoot();
 void makeApiRequest();
 void ledIsOn();
 void PermanentUrl();
+void saveCitiesToPreferences();
+void loadCitiesFromPreferences();
+void configModeCallback(WiFiManager *myWiFiManager);
+void handleDisplaySavedCities();
+void handleSaveCities();
 
 void setup() {
   FastLED.addLeds<LED_TYPE, LED_PIN, COLOR_ORDER>(leds, NUM_LEDS).setCorrection(TypicalLEDStrip);
   FastLED.setBrightness(BRIGHTNESS);
   Serial.begin(115200);
   pinMode(buzzerPin, OUTPUT);
-  connecToWifi();
-  WiFiManager wifiManager;
-  wifiManager.autoConnect("ESP32_Local_Server"); 
+  connectToWifi();
+
+  // Start the web server
   server.on("/", HTTP_GET, handleRoot);
-  server.begin();
-  Serial.println("HTTP server started");
   server.on("/save-cities", HTTP_POST, handleSaveCities);
   server.on("/save-cities", HTTP_GET, handleDisplaySavedCities);
-  loadCitiesFromPreferences(); 
+  server.begin();
+  Serial.println("HTTP server started");
+
+  // Load saved cities and set up MDNS
+  loadCitiesFromPreferences();
   PermanentUrl();
 }
 
 void loop() {
-
   makeApiRequest();
-  server.handleClient(); 
-
+  server.handleClient();
 }
+
 
 
 //url to choose cities http://alerm.local/
@@ -70,10 +76,9 @@ void PermanentUrl() {
 
 
 void saveCitiesToPreferences() {
-  DynamicJsonDocument doc(4096); 
+  DynamicJsonDocument doc(4096);
   JsonArray array = doc.to<JsonArray>();
 
-  // Add cities to the JSON array
   for (int i = 0; i < sizeof(targetCities) / sizeof(targetCities[0]); i++) {
     if (targetCities[i] != "") {
       array.add(targetCities[i]);
@@ -84,7 +89,6 @@ void saveCitiesToPreferences() {
   String jsonString;
   serializeJson(array, jsonString);
 
-  // Save JSON string to preferences
   preferences.begin("my-app", false);
   preferences.putString("savedCities", jsonString);
   preferences.end();
@@ -97,7 +101,7 @@ void loadCitiesFromPreferences() {
   String jsonString = preferences.getString("savedCities", "");
   preferences.end();
 
-  DynamicJsonDocument doc(4096); 
+  DynamicJsonDocument doc(4096);
   deserializeJson(doc, jsonString);
   JsonArray array = doc.as<JsonArray>();
 
@@ -116,9 +120,7 @@ void configModeCallback (WiFiManager * myWiFiManager) {
 }
 
 
-
-
-void connecToWifi() {
+void connectToWifi() {
   WiFiManager wifiManager;
 
   //to menually connection unComment this line
