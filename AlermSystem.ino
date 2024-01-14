@@ -1,4 +1,5 @@
 
+
 #include <FastLED.h>
 #include <WiFi.h>
 #include <DNSServer.h>
@@ -148,7 +149,8 @@ void handleRoot() {
 <!DOCTYPE html>
 <html lang='en'>
 <head>
-    <meta charset='UTF-8'>
+    <meta charset='UTF-8'>        
+    <meta name='viewport' content='width=device-width, initial-scale=1.0'>
     <title>Cities</title>
     <style>
         body {
@@ -201,6 +203,11 @@ void handleRoot() {
         }
         input[type="submit"]:hover {
             background-color: #0056b3;
+        }
+               @media (max-width: 768px) {
+            button {
+                width: auto;
+            }
         }
     </style>
 </head>
