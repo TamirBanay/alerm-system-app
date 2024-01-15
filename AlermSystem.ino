@@ -213,12 +213,12 @@ void handleRoot() {
     </style>
 </head>
 <body>
-    <h1>בחירת ערים</h1>
-    <h3><a href="/save-cities">ערים שמורות </a></h3>
-    <input type='text' id='filterInput' placeholder='חפש ערים...'>
+    <h1>בחירת אזורים</h1>
+    <h3><a href="/save-cities">אזורים שמורים </a></h3>
+    <input type='text' id='filterInput' placeholder='חפש איזורים...'>
     <form id='cityForm'>
         <div id='cityList'></div>
-        <input type='submit' value='שמור ערים'>
+        <input type='submit' value='שמור אזורים'>
     </form>
     <script>
         document.getElementById('cityForm').onsubmit = function(event) {
@@ -288,7 +288,7 @@ void handleDisplaySavedCities() {
 <head>
     <meta charset='UTF-8'>
     <meta name='viewport' content='width=device-width, initial-scale=1.0'>
-    <title>ערים שנבחרו</title>
+    <title>אזורים שנבחרו</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -341,7 +341,7 @@ void handleDisplaySavedCities() {
     </style>
 </head>
 <body>
-    <h1>ערים שנבחרו</h1>
+    <h1>אזורים שנבחרו</h1>
     <ul>
 )";
 
