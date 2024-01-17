@@ -124,28 +124,27 @@ void configModeCallback (WiFiManager * myWiFiManager) {
 
 void connectToWifi() {
   WiFiManager wifiManager;
-
-  //to menually connection unComment this line
-  //  wifiManager.resetSettings();
-
   wifiManager.setAPCallback(configModeCallback);
+  String ssid = "Alerm System " + String((uint32_t)ESP.getEfuseMac(), HEX); // Create an SSID with the chip ID
 
-  if (!wifiManager.autoConnect("Alerm System")) {
+  Serial.println("Connecting to: " + ssid);
+
+  if (!wifiManager.autoConnect(ssid.c_str())) { // Convert the String to a char array
     Serial.println("Failed to connect and hit timeout");
     delay(3000);
     ESP.restart();
   } else {
-    Serial.println("sucsses connect to wifi");
+    Serial.println("Success: Connected to WiFi");
     leds[0] = CRGB::Green;
     FastLED.show();
-
-
   }
-
 }
 
 
 void handleRoot() {
+  // Assuming idTitle is a global variable already set somewhere in your code
+  String idTitle = String((uint32_t)ESP.getEfuseMac(), HEX);
+
   String htmlContent = R"(
 <!DOCTYPE html>
 <html lang='en'>
@@ -213,14 +212,21 @@ void handleRoot() {
     </style>
 </head>
 <body>
-    <h1>בחירת אזורים</h1>
+)";
+
+  // Concatenate the idTitle with the HTML content
+  htmlContent += "<h1>" + idTitle + " - בחירת אזורים</h1>"; 
+
+  // Continue with the rest of your HTML content
+  htmlContent += R"(
     <h3><a href="/save-cities">אזורים שמורים </a></h3>
     <input type='text' id='filterInput' placeholder='חפש איזורים...'>
     <form id='cityForm'>
         <div id='cityList'></div>
         <input type='submit' value='שמור אזורים'>
     </form>
-    <script>
+   
+           <script>
         document.getElementById('cityForm').onsubmit = function(event) {
             event.preventDefault();
             var checkedBoxes = document.querySelectorAll('input[name=city]:checked');
@@ -269,9 +275,11 @@ void handleRoot() {
             console.error('Error fetching the cities:', error);
         });
     </script>
+  
 </body>
 </html>
 )";
+
   server.send(200, "text/html", htmlContent);
 }
 
