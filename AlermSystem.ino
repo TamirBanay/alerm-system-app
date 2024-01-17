@@ -135,8 +135,7 @@ void connectToWifi() {
     ESP.restart();
   } else {
     Serial.println("Success: Connected to WiFi");
-    leds[0] = CRGB::Green;
-    FastLED.show();
+
   }
 }
 
@@ -161,7 +160,7 @@ void handleRoot() {
             color: #333;
             direction:rtl;
         }
-        h1,h3 {
+        h1,h3 ,h2{
             text-align: center;
             color: #444;
         }
@@ -215,7 +214,8 @@ void handleRoot() {
 )";
 
   // Concatenate the idTitle with the HTML content
-  htmlContent += "<h1>" + idTitle + " - בחירת אזורים</h1>"; 
+  htmlContent += "<h1>בחירת אזורים</h1>"; 
+  htmlContent += "<h2>מספר צ'יפ: " + idTitle + "</h2>"; 
 
   // Continue with the rest of your HTML content
   htmlContent += R"(
@@ -470,6 +470,8 @@ void makeApiRequest() {
       Serial.print("HTTP request failed, error: ");
       Serial.println(http.errorToString(httpCode));
     }
+    leds[0] = CRGB::Green;
+    FastLED.show();
     http.end();
   } else {
     Serial.println("Disconnected from WiFi. Trying to reconnect...");
