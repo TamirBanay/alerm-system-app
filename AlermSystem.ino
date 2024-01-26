@@ -26,6 +26,7 @@ const char* apiEndpoint = "https://www.oref.org.il/WarningMessages/alert/alerts.
 WebServer server(80);
 String savedCitiesJson;
 Preferences preferences;
+String idTitle;
 
 // Function Declarations
 void connectToWifi();
@@ -38,6 +39,7 @@ void loadCitiesFromPreferences();
 void configModeCallback(WiFiManager *myWiFiManager);
 void handleDisplaySavedCities();
 void handleSaveCities();
+void handleChangeId();
 
 void setup() {
   FastLED.addLeds<LED_TYPE, LED_PIN, COLOR_ORDER>(leds, NUM_LEDS).setCorrection(TypicalLEDStrip);
@@ -45,10 +47,22 @@ void setup() {
   Serial.begin(115200);
   connectToWifi();
 
+  preferences.begin("alerm", false);
+  idTitle = preferences.getString("idTitle", ""); // Use default value if not found
+
+  if (idTitle == "") {
+    idTitle = String((uint32_t)ESP.getEfuseMac(), HEX);
+  }
+
+  preferences.end();
+
+
   // Start the web server
   server.on("/", HTTP_GET, handleRoot);
   server.on("/save-cities", HTTP_POST, handleSaveCities);
   server.on("/save-cities", HTTP_GET, handleDisplaySavedCities);
+  server.on("/change-id", HTTP_POST, handleChangeId);
+
   server.begin();
   Serial.println("HTTP server started");
 
@@ -61,8 +75,6 @@ void loop() {
   makeApiRequest();
   server.handleClient();
 }
-
-
 
 //url to choose cities http://alerm.local/
 void PermanentUrl() {
@@ -139,9 +151,6 @@ void connectToWifi() {
 
 
 void handleRoot() {
-  // Assuming idTitle is a global variable already set somewhere in your code
-  String idTitle = String((uint32_t)ESP.getEfuseMac(), HEX);
-
   String htmlContent = R"(
 <!DOCTYPE html>
 <html lang='en'>
@@ -149,7 +158,7 @@ void handleRoot() {
     <meta charset='UTF-8'>        
     <meta name='viewport' content='width=device-width, initial-scale=1.0'>
     <title>Cities</title>
-    <style>
+ <style>
         body {
             font-family: 'Arial', sans-serif;
             background-color: #f4f4f4;
@@ -162,6 +171,11 @@ void handleRoot() {
             text-align: center;
             color: #444;
         }
+        
+        #changeID{
+            text-align: center;
+          }
+        
         #filterInput {
             display: block;
             margin: 20px auto;
@@ -209,14 +223,20 @@ void handleRoot() {
     </style>
 </head>
 <body>
+    <h2>שם:  )" + idTitle + R"(</h2>
 )";
 
-  // Concatenate the idTitle with the HTML content
-  htmlContent += "<h1>בחירת אזורים</h1>"; 
-  htmlContent += "<h2>מספר צ'יפ: " + idTitle + "</h2>"; 
+htmlContent += R"(
+    <form id="changeID" action="/change-id" method="POST">
+        <label for="newId">החלף שם:</label>
+        <input type="text" id="newId" name="newId" placeholder="שם חדש">
+        <input type="submit" value="החלף שם">
+    </form>
+)";
 
-  // Continue with the rest of your HTML content
-  htmlContent += R"(
+
+htmlContent += R"(
+    <h1>בחירת אזורים</h1>
     <h3><a href="/save-cities">אזורים שמורים </a></h3>
     <input type='text' id='filterInput' placeholder='חפש איזורים...'>
     <form id='cityForm'>
@@ -272,11 +292,13 @@ void handleRoot() {
         .catch(error => {
             console.error('Error fetching the cities:', error);
         });
-    </script>
-  
-</body>
+    </script></body>
 </html>
 )";
+
+// Send the HTML content
+server.send(200, "text/html", htmlContent);
+
 
   server.send(200, "text/html", htmlContent);
 }
@@ -366,6 +388,27 @@ void handleDisplaySavedCities() {
 
   server.send(200, "text/html", responseHtml);
 }
+
+
+
+void handleChangeId() {
+  if (server.hasArg("newId")) {
+    idTitle = server.arg("newId"); // Update the idTitle with the new value
+    Serial.println("ID changed to: " + idTitle);
+
+    // Save the new ID to NVS
+    preferences.begin("alerm", false);
+    preferences.putString("idTitle", idTitle);
+    preferences.end();
+
+    // Redirect back to the root page
+    server.sendHeader("Location", "/", true);
+    server.send(302, "text/plain", "");
+  } else {
+    server.send(400, "text/plain", "Bad Request: newId not provided");
+  }
+}
+
 void handleSaveCities() {
   if (server.hasArg("plain")) {
     String requestBody = server.arg("plain");
