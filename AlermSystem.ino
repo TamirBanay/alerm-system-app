@@ -21,7 +21,6 @@
 
 // Global Variables
 CRGB leds[NUM_LEDS];
-const int buzzerPin = 35;
 String targetCities[4];
 const char* apiEndpoint = "https://www.oref.org.il/WarningMessages/alert/alerts.json";
 WebServer server(80);
@@ -44,7 +43,6 @@ void setup() {
   FastLED.addLeds<LED_TYPE, LED_PIN, COLOR_ORDER>(leds, NUM_LEDS).setCorrection(TypicalLEDStrip);
   FastLED.setBrightness(BRIGHTNESS);
   Serial.begin(115200);
-  pinMode(buzzerPin, OUTPUT);
   connectToWifi();
 
   // Start the web server
@@ -481,7 +479,6 @@ void makeApiRequest() {
 void ledIsOn() {
   for (int i = 0; i < NUM_LEDS; i++) {
     leds[i] = CRGB::Red;  // Set to red color
-    digitalWrite(buzzerPin, HIGH);
 
   }
   FastLED.show();
@@ -489,7 +486,6 @@ void ledIsOn() {
 
   for (int i = 0; i < NUM_LEDS; i++) {
     leds[i] = CRGB::Black;
-    digitalWrite(buzzerPin, LOW);
 
   }
   FastLED.show();
