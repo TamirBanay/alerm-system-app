@@ -11,6 +11,8 @@
 #include <ArduinoJson.h>
 #include <Preferences.h>
 #include <ESPmDNS.h>
+#include <HTTPClient.h>
+#include <time.h>
 
 // Constants for LED configuration
 #define LED_PIN     25
@@ -21,12 +23,19 @@
 
 // Global Variables
 CRGB leds[NUM_LEDS];
+String cityAlermLog = "";
 String targetCities[4];
 const char* apiEndpoint = "https://www.oref.org.il/WarningMessages/alert/alerts.json";
 WebServer server(80);
 String savedCitiesJson;
 Preferences preferences;
 String idTitle;
+
+const char* ntpServer = "pool.ntp.org";
+const long gmtOffset_sec = 2 * 3600;
+const int   daylightOffset_sec = 3600;
+
+String mac = WiFi.macAddress();
 
 // Function Declarations
 void connectToWifi();
@@ -40,7 +49,11 @@ void configModeCallback(WiFiManager *myWiFiManager);
 void handleDisplaySavedCities();
 void handleSaveCities();
 void handleChangeId();
-
+void sendLog(String);
+String getFormattedTime();
+void registerModule();
+void handleTriggerLed();
+void handleTestled();
 void setup() {
   FastLED.addLeds<LED_TYPE, LED_PIN, COLOR_ORDER>(leds, NUM_LEDS).setCorrection(TypicalLEDStrip);
   FastLED.setBrightness(BRIGHTNESS);
@@ -53,15 +66,17 @@ void setup() {
   if (idTitle == "") {
     idTitle = String((uint32_t)ESP.getEfuseMac(), HEX);
   }
-
+  registerModule();
   preferences.end();
-
+  configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
+  sendLog("module " + idTitle + " start ");
 
   // Start the web server
   server.on("/", HTTP_GET, handleRoot);
   server.on("/save-cities", HTTP_POST, handleSaveCities);
   server.on("/save-cities", HTTP_GET, handleDisplaySavedCities);
   server.on("/change-id", HTTP_POST, handleChangeId);
+
 
   server.begin();
   Serial.println("HTTP server started");
@@ -73,8 +88,10 @@ void setup() {
 
 void loop() {
   makeApiRequest();
+  handleTestled();
   server.handleClient();
 }
+
 
 //url to choose cities http://alerm.local/
 void PermanentUrl() {
@@ -123,6 +140,23 @@ void loadCitiesFromPreferences() {
       targetCities[cityIndex++] = city.as<String>();
     }
   }
+  for (int j = 0; j < 1; j++) {
+    String logMessage = "Target cities: ";
+
+    // Constructing the list of target cities
+    for (int i = 0; i < sizeof(targetCities) / sizeof(targetCities[0]); i++) {
+      logMessage += targetCities[i];  // Add the city to the log message
+      if (i < sizeof(targetCities) / sizeof(targetCities[0]) - 1) {
+        logMessage += ", ";  // Add a comma and space if it's not the last city
+      }
+    }
+
+    logMessage += " for module: " + idTitle + " "; // Add the module ID to the log message
+
+    // Now send the log
+    sendLog(logMessage);
+  }
+
 }
 
 void configModeCallback (WiFiManager * myWiFiManager) {
@@ -145,6 +179,8 @@ void connectToWifi() {
     ESP.restart();
   } else {
     Serial.println("Success: Connected to WiFi");
+    Serial.print("IP Address: ");
+    Serial.println(WiFi.localIP());
 
   }
 }
@@ -441,6 +477,23 @@ void handleSaveCities() {
   } else {
     server.send(400, "text/plain", "Bad Request");
   }
+for (int j = 0; j < 1; j++) {
+    String logMessage = "Target city change To: ";
+
+    // Constructing the list of target cities
+    for (int i = 0; i < sizeof(targetCities) / sizeof(targetCities[0]); i++) {
+        logMessage += targetCities[i];  // Add the city to the log message
+        if (i < sizeof(targetCities) / sizeof(targetCities[0]) - 1) {
+            logMessage += ", ";  // Add a comma and space if it's not the last city
+        }
+    }
+
+    logMessage += " for module: " + idTitle+" ";  // Add the module ID to the log message
+
+    // Now send the log
+    sendLog(logMessage);
+}
+
 }
 
 
@@ -468,6 +521,7 @@ void makeApiRequest() {
       }
       for (int i = 0; i < sizeof(targetCities) / sizeof(targetCities[0]); i++) {
         Serial.println("Target city: " + targetCities[i]);
+
       }
 
       DynamicJsonDocument doc(4096);
@@ -489,6 +543,7 @@ void makeApiRequest() {
             if (cityValue.as<String>() == city) {
               alertDetected = true;
               Serial.println("Alert for: " + city);
+              cityAlermLog = city;
               break;
             }
           }
@@ -500,6 +555,8 @@ void makeApiRequest() {
         if (alertDetected) {
           Serial.println("Triggering alarm...");
           ledIsOn();
+          sendLog("alerm active at "+idTitle+" in city:" + cityAlermLog);
+
         } else {
           Serial.println("No alert for target cities.");
         }
@@ -519,18 +576,131 @@ void makeApiRequest() {
   }
   delay(1000);
 }
+
+String getFormattedTime() {
+  struct tm timeinfo;
+  int retry = 0;
+  const int retry_count = 10; // Retry 10 times
+  while (!getLocalTime(&timeinfo) && ++retry < retry_count) {
+    Serial.println("Failed to obtain time, retrying...");
+    delay(500); // Wait half a second before retrying
+  }
+
+  if (retry >= retry_count) {
+    Serial.println("Failed to obtain time after several attempts");
+    return "";
+  }
+
+  char timeStringBuff[80]; //80 chars should be enough
+  strftime(timeStringBuff, sizeof(timeStringBuff), " %Y-%m-%dT%H:%M:%SZ ", &timeinfo);
+  Serial.println(timeStringBuff); // Print the time to the Serial monitor
+  return String(timeStringBuff);
+}
+
+
+void sendLog(String logMessage) {
+  String timestamp = getFormattedTime(); // Get the current time as a string
+  
+  if (WiFi.status() == WL_CONNECTED) {
+    HTTPClient http;
+    http.begin("https://logs-foem.onrender.com/api/logs");
+    http.addHeader("Content-Type", "application/json");
+    
+    String requestBody = "{\"log\": \"" + logMessage + "\", \"timestamp\": \"" + timestamp + "\"}";
+    Serial.println("Request Body: " + requestBody); // Debugging line
+
+    int httpResponseCode = http.POST(requestBody);
+  
+    if (httpResponseCode > 0) {
+      Serial.print("HTTP Response code: ");
+      Serial.println(httpResponseCode);
+      String response = http.getString();
+      Serial.println("Response: " + response); // Debugging line
+    } else {
+      Serial.print("Error code: ");
+      Serial.println(httpResponseCode);
+      Serial.println("Error: " + http.errorToString(httpResponseCode)); // Debugging line
+    }
+  
+    http.end(); // Close connection
+  } else {
+    Serial.println("WiFi not connected");
+  }
+}
 void ledIsOn() {
-  for (int i = 0; i < NUM_LEDS; i++) {
-    leds[i] = CRGB::Red;  // Set to red color
+  int blinkDurationInSeconds = 10; 
+  int blinkSpeedInMillis = 100; 
 
+  int numberOfBlinks = (blinkDurationInSeconds * 1000) / (blinkSpeedInMillis * 2);
+
+  for (int j = 0; j < numberOfBlinks; j++) {
+    for (int i = 0; i < NUM_LEDS; i++) {
+      leds[i] = CRGB::Red; 
+    }
+    FastLED.show();
+    delay(blinkSpeedInMillis);
+
+    for (int i = 0; i < NUM_LEDS; i++) {
+      leds[i] = CRGB::Black;
+    }
+    FastLED.show();
+    delay(blinkSpeedInMillis);
   }
-  FastLED.show();
-  delay(500);  
+}
 
-  for (int i = 0; i < NUM_LEDS; i++) {
-    leds[i] = CRGB::Black;
+void registerModule() {
+    if (WiFi.status() == WL_CONNECTED) {
+        HTTPClient http;
+        http.begin("https://logs-foem.onrender.com/api/register");
+        http.addHeader("Content-Type", "application/json");
+        
+        String ipAddress = WiFi.localIP().toString(); 
+        String requestBody = "{\"id\": \"" + idTitle + "\", \"ipAddress\": \"" + ipAddress + "\"}";
 
-  }
-  FastLED.show();
-  delay(500);  
+        int httpResponseCode = http.POST(requestBody);
+        
+        if (httpResponseCode > 0) {
+            Serial.println("Module registered successfully: " + idTitle);
+        } else {
+            Serial.println("Failed to register module: " + idTitle);
+            Serial.println("Error code: " + httpResponseCode);
+        }
+        http.end();
+    }
+}
+
+
+
+void handleTestled() {
+    if (WiFi.status() == WL_CONNECTED) {
+        HTTPClient http;
+        http.begin("https://logs-foem.onrender.com/testLed");
+        http.addHeader("Content-Type", "application/json");
+        int httpCode = http.GET();
+        
+        if(httpCode == 200){
+           String payload = http.getString();
+           
+           if(payload == "true") {
+              ledIsOn();
+              String moduleDetails = "{\"id\": \"" + idTitle + "\", \"status\": \"success\"}";
+              http.begin("https://logs-foem.onrender.com/notifySuccess");
+              http.addHeader("Content-Type", "application/json");
+              int notifyCode = http.POST(moduleDetails);
+              
+              if(notifyCode == 200) {
+                  Serial.println("Success notification sent");
+              } else {
+                  Serial.println("Failed to send success notification");
+              }
+           }
+        } else {
+          Serial.println("Error on HTTP request");
+          Serial.println(httpCode);
+        }
+        
+        http.end();
+    } else {
+        Serial.println("WiFi not connected");
+    }
 }
