@@ -1,6 +1,4 @@
 
-
-
 #include <FastLED.h>
 #include <WiFi.h>
 #include <DNSServer.h>
@@ -14,7 +12,7 @@
 #include <HTTPClient.h>
 #include <time.h>
 
-// Constants for LED configuration
+// Constants for LED configurationactivateTestLedByMacAdrress
 #define LED_PIN     25
 #define NUM_LEDS    30
 #define BRIGHTNESS  50
@@ -26,20 +24,24 @@ CRGB leds[NUM_LEDS];
 String cityAlermLog = "";
 String targetCities[4];
 const char* apiEndpoint = "https://www.oref.org.il/WarningMessages/alert/alerts.json";
-WebServer server(80);
 String savedCitiesJson;
+String moduleName;
+String macAddress = WiFi.macAddress();
+String ipAddress = WiFi.localIP().toString();
+
 Preferences preferences;
-String idTitle;
+WebServer server(80);
 
 const char* ntpServer = "pool.ntp.org";
 const long gmtOffset_sec = 2 * 3600;
 const int   daylightOffset_sec = 3600;
 
-String mac = WiFi.macAddress();
 
 // Function Declarations
 void connectToWifi();
 void handleRoot();
+void handleInfo();
+void handleTest();
 void makeApiRequest();
 void ledIsOn();
 void PermanentUrl();
@@ -54,6 +56,7 @@ String getFormattedTime();
 void registerModule();
 void handleTriggerLed();
 void handleTestled();
+void checkMacAddressWithServer();
 void setup() {
   FastLED.addLeds<LED_TYPE, LED_PIN, COLOR_ORDER>(leds, NUM_LEDS).setCorrection(TypicalLEDStrip);
   FastLED.setBrightness(BRIGHTNESS);
@@ -61,22 +64,25 @@ void setup() {
   connectToWifi();
 
   preferences.begin("alerm", false);
-  idTitle = preferences.getString("idTitle", ""); // Use default value if not found
+  moduleName = preferences.getString("moduleName", ""); // Use default value if not found
 
-  if (idTitle == "") {
-    idTitle = String((uint32_t)ESP.getEfuseMac(), HEX);
+  if (moduleName == "") {
+    moduleName = String((uint32_t)ESP.getEfuseMac(), HEX);
   }
+
   registerModule();
   preferences.end();
   configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
-  sendLog("module " + idTitle + " start ");
+  sendLog("Module " + moduleName + " Is Connected");
 
   // Start the web server
   server.on("/", HTTP_GET, handleRoot);
+  server.on("/info", HTTP_GET, handleInfo);
+  server.on("/test", HTTP_GET, handleTest);
   server.on("/save-cities", HTTP_POST, handleSaveCities);
   server.on("/save-cities", HTTP_GET, handleDisplaySavedCities);
   server.on("/change-id", HTTP_POST, handleChangeId);
-
+  server.on("/activateLed", HTTP_POST, ledIsOn);
 
   server.begin();
   Serial.println("HTTP server started");
@@ -88,7 +94,8 @@ void setup() {
 
 void loop() {
   makeApiRequest();
-  handleTestled();
+  //  handleTestled();
+  checkMacAddressWithServer();
   server.handleClient();
 }
 
@@ -151,13 +158,16 @@ void loadCitiesFromPreferences() {
       }
     }
 
-    logMessage += " for module: " + idTitle + " "; // Add the module ID to the log message
+    logMessage += " for module: " + moduleName + " "; // Add the module ID to the log message
 
     // Now send the log
     sendLog(logMessage);
   }
 
 }
+
+
+
 
 void configModeCallback (WiFiManager * myWiFiManager) {
   Serial.println("Entered config mode");
@@ -184,6 +194,224 @@ void connectToWifi() {
 
   }
 }
+
+void handleInfo() {
+  String wifiName = WiFi.SSID();
+  uint32_t chipId = ESP.getEfuseMac();
+  IPAddress ip = WiFi.localIP();
+  String macAddress = WiFi.macAddress();
+
+  String htmlContent = R"(
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">  checkMacAddressWithServer();
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Info Page</title>
+    <style>
+    body {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        margin: 0;
+        padding: 20px;
+        background-color: #f4f4f4;
+        color: #333;
+    }
+    h1 {
+        color: #4CAF50;
+        margin-bottom: 20px;
+    }
+    p {
+        font-size: 18px;
+        line-height: 1.6;
+        color: #666;
+    }
+    div {
+        background: white;
+        padding: 20px;
+        border-radius: 5px;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        margin-bottom: 20px;
+    }
+    form {
+        background: white;
+        padding: 20px;
+        border-radius: 5px;
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        max-width: 500px;
+        margin: 20px auto;
+        direction:rtl;
+    }
+    label {
+        font-size: 18px;
+        color: #555;
+    }
+    input[type="text"],
+    input[type="submit"] {
+        width: calc(100% - 22px);
+        padding: 10px;
+        margin: 8px 0;
+        display: inline-block;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        box-sizing: border-box;
+    }
+    input[type="submit"] {
+        width: 100%;
+        background-color: #007bff;
+        color: white;
+        cursor: pointer;
+    }
+    input[type="submit"]:hover {
+        background-color: #0056b3;
+    }
+    nav ul {
+        list-style-type: none;
+        display: flex;
+        flex-direction: row;
+        justify-content: space-around;
+        padding-right: 0px;
+        padding-left: 0px;
+    }
+    nav li {
+        background-color: #fff;
+        margin: 10px 0;
+        padding: 10px;
+        border-radius: 5px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    nav a {
+        color: black;
+        text-decoration: none;
+        font-weight: bold;
+    }
+    </style>
+</head>
+<body>
+<nav>
+    <ul>
+      <li><a href="/">Home</a></li>
+      <li><a href="/save-cities">Cities</a></li>
+      <li><a href="/test">Test</a></li>
+      <li><a href="/info">Info</a></li>
+    </ul>
+</nav>
+<div>
+    <h2>Module Details:</h2>
+    <p>WiFi Name: )" + wifiName + R"(</p>
+    <p>Module Name: )" + moduleName + R"(</p>
+    <p>IP Address: )" + ip.toString() + R"(</p>
+    <p>MAC Address: )" + macAddress + R"(</p>
+</div>
+<form id="changeID" action="/change-id" method="POST">
+    <label for="newId">Change Name:</label>
+    <input type="text" id="newId" name="newId" placeholder="New name">
+    <input type="submit" value="Change Name">
+</form>
+</body>
+</html>
+)";
+
+  server.send(200, "text/html", htmlContent);
+}
+
+
+void handleTest() {
+  String htmlContent = R"(
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Info Page</title>
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                margin: 0;
+                padding: 20px;
+                background-color: #f4f4f4;
+                color: #333;
+            }
+            button {
+            display: block;
+            width: 200px;
+            padding: 10px;
+            margin: 20px auto;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.2s;
+        }
+            button:hover {
+            background-color: #0056b3;
+        }
+            h1 {
+                color: #444;
+            }
+            nav ul {
+        list-style-type: none; 
+        display: flex; 
+        flex-direction:row;
+        justify-content:space-around; 
+         padding-right: 0px;  
+        padding-left: 0px;        
+      
+            
+    }
+    nav li {
+        background-color: #fff;
+        margin: 10px 0;
+        padding: 10px;
+        border-radius: 5px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    nav a {
+        color: black; 
+        text-decoration: none;
+        font-weight: bold;
+    }
+
+        </style>
+    </head>
+    <body>
+    <nav>
+        <ul>
+          <li><a href="/" ${currentRoute === "/" ? 'style="font-weight:bold;"' : ""}>Home</a></li>
+          <li><a href="/save-cities" ${currentRoute === "/cities" ? 'style="font-weight:bold;"' : ""}>Cities</a></li>
+          <li><a href="/test" ${currentRoute === "/test" ? 'style="font-weight:bold;"' : ""}>Test</a></li>
+          <li><a href="/info" ${currentRoute === "/Info" ? 'style="font-weight:bold;"' : ""}>Info</a></li>
+
+        </ul>
+    </nav>      
+        <button id="activateLedButton">Test LED</button>
+
+    </body>
+     <script>
+        document.getElementById('activateLedButton').addEventListener('click', function() {
+          fetch('/activateLed', { method: 'POST' })
+            .then(response => response.text())
+            .then(data => {
+              console.log(data);
+              // Add any additional logic you want to perform after the LEDs are activated
+            })
+            .catch(error => {
+              console.error('Error:', error);
+            });
+        });
+      </script>
+    
+    </html>
+    )";
+
+  // Send the HTML content
+  server.send(200, "text/html", htmlContent);
+}
+
+
+
 
 
 void handleRoot() {
@@ -234,6 +462,29 @@ void handleRoot() {
             border-bottom: 1px solid #ddd; 
             cursor: pointer;
         }
+nav ul {
+        list-style-type: none; 
+        display: flex; 
+        flex-direction:row-reverse;
+        justify-content:space-around; 
+         padding-right: 0px;  
+        padding-left: 0px;        
+            
+    }
+    nav li {
+        background-color: #fff;
+        margin: 10px 0;
+        padding: 10px;
+        border-radius: 5px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    nav a {
+        color: black; 
+        text-decoration: none;
+        font-weight: bold;
+    }
+
+
         
         .city-label:last-child {
             border-bottom: none;
@@ -259,21 +510,19 @@ void handleRoot() {
     </style>
 </head>
 <body>
-    <h2>שם:  )" + idTitle + R"(</h2>
+  <nav>
+        <ul>
+          <li><a href="/" ${currentRoute === "/" ? 'style="font-weight:bold;"' : ""}>Home</a></li>
+          <li><a href="/save-cities" ${currentRoute === "/cities" ? 'style="font-weight:bold;"' : ""}>Cities</a></li>
+          <li><a href="/test" ${currentRoute === "/test" ? 'style="font-weight:bold;"' : ""}>Test</a></li>
+          <li><a href="/info" ${currentRoute === "/Info" ? 'style="font-weight:bold;"' : ""}>Info</a></li>
+
+        </ul>
+    </nav>
+    <h2>שם:  )" + moduleName + R"(</h2>
 )";
 
 htmlContent += R"(
-    <form id="changeID" action="/change-id" method="POST">
-        <label for="newId">החלף שם:</label>
-        <input type="text" id="newId" name="newId" placeholder="שם חדש">
-        <input type="submit" value="החלף שם">
-    </form>
-)";
-
-
-htmlContent += R"(
-    <h1>בחירת אזורים</h1>
-    <h3><a href="/save-cities">אזורים שמורים </a></h3>
     <input type='text' id='filterInput' placeholder='חפש איזורים...'>
     <form id='cityForm'>
         <div id='cityList'></div>
@@ -328,7 +577,9 @@ htmlContent += R"(
         .catch(error => {
             console.error('Error fetching the cities:', error);
         });
-    </script></body>
+    </script>
+    
+    </body>
 </html>
 )";
 
@@ -381,6 +632,28 @@ void handleDisplaySavedCities() {
         li:hover {
             transform: translateY(-2px);
         }
+
+nav ul {
+        list-style-type: none; 
+        display: flex; 
+        flex-direction:row-reverse;
+        justify-content:space-around; 
+        padding-right: 0px;
+        padding-right: 0px;        
+    }
+    nav li {
+        background-color: #fff;
+        margin: 10px 0;
+        padding: 10px;
+        border-radius: 5px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    nav a {
+        color: black; 
+        text-decoration: none;
+        font-weight: bold;
+    }
+
         button {
             display: block;
             width: 200px;
@@ -405,6 +678,15 @@ void handleDisplaySavedCities() {
     </style>
 </head>
 <body>
+<nav>
+        <ul>
+          <li><a href="/" ${currentRoute === "/" ? 'style="font-weight:bold;"' : ""}>Home</a></li>
+          <li><a href="/save-cities" ${currentRoute === "/cities" ? 'style="font-weight:bold;"' : ""}>Cities</a></li>
+          <li><a href="/test" ${currentRoute === "/test" ? 'style="font-weight:bold;"' : ""}>Test</a></li>
+          <li><a href="/info" ${currentRoute === "/Info" ? 'style="font-weight:bold;"' : ""}>Info</a></li>
+
+        </ul>
+    </nav>
     <h1>אזורים שנבחרו</h1>
     <ul>
 )";
@@ -429,12 +711,12 @@ void handleDisplaySavedCities() {
 
 void handleChangeId() {
   if (server.hasArg("newId")) {
-    idTitle = server.arg("newId"); // Update the idTitle with the new value
-    Serial.println("ID changed to: " + idTitle);
+    moduleName = server.arg("newId"); // Update the moduleName with the new value
+    Serial.println("ID changed to: " + moduleName);
 
     // Save the new ID to NVS
     preferences.begin("alerm", false);
-    preferences.putString("idTitle", idTitle);
+    preferences.putString("moduleName", moduleName);
     preferences.end();
 
     // Redirect back to the root page
@@ -488,14 +770,13 @@ for (int j = 0; j < 1; j++) {
         }
     }
 
-    logMessage += " for module: " + idTitle+" ";  // Add the module ID to the log message
+    logMessage += " for module: " + moduleName+" ";  // Add the module ID to the log message
 
     // Now send the log
     sendLog(logMessage);
 }
 
 }
-
 
 void makeApiRequest() {
   if (WiFi.status() == WL_CONNECTED) {
@@ -508,19 +789,19 @@ void makeApiRequest() {
     http.addHeader("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.100 Safari/537.36");
 
     int httpCode = http.GET();
-    Serial.print("HTTP Status Code: ");
-    Serial.println(httpCode);
+//    Serial.print("HTTP Status Code: ");
+//    Serial.println(httpCode);
 
     if (httpCode == 200) {
       String payload = http.getString();
-      Serial.println("Server response:");
+//      Serial.println("Server response:");
       Serial.println(payload);
 
       if (payload.startsWith("\xEF\xBB\xBF")) {
         payload = payload.substring(3); // Remove BOM
       }
       for (int i = 0; i < sizeof(targetCities) / sizeof(targetCities[0]); i++) {
-        Serial.println("Target city: " + targetCities[i]);
+//        Serial.println("Target city: " + targetCities[i]);
 
       }
 
@@ -555,14 +836,14 @@ void makeApiRequest() {
         if (alertDetected) {
           Serial.println("Triggering alarm...");
           ledIsOn();
-          sendLog("alerm active at "+idTitle+" in city:" + cityAlermLog);
+          sendLog("alerm active at "+moduleName+" in city:" + cityAlermLog);
 
         } else {
           Serial.println("No alert for target cities.");
         }
       } else {
-        Serial.print("deserializeJson() failed: ");
-        Serial.println(error.c_str());
+//        Serial.print("deserializeJson() failed: ");
+//        Serial.println(error.c_str());
       }
     } else {
       Serial.print("HTTP request failed, error: ");
@@ -572,7 +853,7 @@ void makeApiRequest() {
     FastLED.show();
     http.end();
   } else {
-    Serial.println("Disconnected from WiFi. Trying to reconnect...");
+//    Serial.println("Disconnected from WiFi. Trying to reconnect...");
   }
   delay(1000);
 }
@@ -580,7 +861,7 @@ void makeApiRequest() {
 String getFormattedTime() {
   struct tm timeinfo;
   int retry = 0;
-  const int retry_count = 10; // Retry 10 times
+  const int retry_count = 3; 
   while (!getLocalTime(&timeinfo) && ++retry < retry_count) {
     Serial.println("Failed to obtain time, retrying...");
     delay(500); // Wait half a second before retrying
@@ -606,7 +887,7 @@ void sendLog(String logMessage) {
     http.begin("https://logs-foem.onrender.com/api/logs");
     http.addHeader("Content-Type", "application/json");
     
-    String requestBody = "{\"log\": \"" + logMessage + "\", \"timestamp\": \"" + timestamp + "\"}";
+    String requestBody = "{\"log\": \"" + logMessage + "\", \"timestamp\": \"" + timestamp + "\", \"macAddress\": \"" + macAddress + "\"}";
     Serial.println("Request Body: " + requestBody); // Debugging line
 
     int httpResponseCode = http.POST(requestBody);
@@ -649,58 +930,124 @@ void ledIsOn() {
 }
 
 void registerModule() {
+    IPAddress ip = WiFi.localIP();
+
     if (WiFi.status() == WL_CONNECTED) {
         HTTPClient http;
         http.begin("https://logs-foem.onrender.com/api/register");
         http.addHeader("Content-Type", "application/json");
-        
-        String ipAddress = WiFi.localIP().toString(); 
-        String requestBody = "{\"id\": \"" + idTitle + "\", \"ipAddress\": \"" + ipAddress + "\"}";
+        String requestBody = "{\"moduleName\": \"" + moduleName + "\", \"ipAddress\": \"" + ip.toString() + "\", \"macAddress\": \"" + macAddress + "\"}";
 
         int httpResponseCode = http.POST(requestBody);
         
-        if (httpResponseCode > 0) {
-            Serial.println("Module registered successfully: " + idTitle);
+        if (httpResponseCode == HTTP_CODE_OK) {
+            Serial.println("Module registered successfully: " + moduleName);
         } else {
-            Serial.println("Failed to register module: " + idTitle);
+            Serial.println("Failed to register module: " + moduleName);
             Serial.println("Error code: " + httpResponseCode);
         }
         http.end();
     }
 }
-
-
+  
 
 void handleTestled() {
     if (WiFi.status() == WL_CONNECTED) {
         HTTPClient http;
-        http.begin("https://logs-foem.onrender.com/testLed");
+        http.begin("https://logs-foem.onrender.com/api/checkIfModuleConnected");
         http.addHeader("Content-Type", "application/json");
         int httpCode = http.GET();
         
         if(httpCode == 200){
-           String payload = http.getString();
-           
-           if(payload == "true") {
-              ledIsOn();
-              String moduleDetails = "{\"id\": \"" + idTitle + "\", \"status\": \"success\"}";
-              http.begin("https://logs-foem.onrender.com/notifySuccess");
-              http.addHeader("Content-Type", "application/json");
-              int notifyCode = http.POST(moduleDetails);
-              
-              if(notifyCode == 200) {
-                  Serial.println("Success notification sent");
-              } else {
-                  Serial.println("Failed to send success notification");
-              }
-           }
+            String payload = http.getString();
+            
+            if(payload == "true") {
+                ledIsOn(); // Activate the LED
+                String moduleDetails = "{\"moduleName\": \"" + moduleName + "\", \"status\": \"success\", \"macAddress\": \"" + macAddress + "\"}";
+               
+                http.begin("https://logs-foem.onrender.com/api/notifySuccess");
+                http.addHeader("Content-Type", "application/json");
+                int notifyCode = http.POST(moduleDetails);
+                
+                if(notifyCode == 200) {
+                    Serial.println("Success notification sent");
+                    Serial.println(moduleDetails);
+
+                } else {
+                    Serial.println("Failed to send success notification");
+                    Serial.println(notifyCode);
+                }
+            } else {
+                Serial.println("Test LED is not true");
+            }
         } else {
-          Serial.println("Error on HTTP request");
-          Serial.println(httpCode);
+            Serial.println("Error on HTTP request");
+            Serial.println(httpCode);
         }
         
         http.end();
     } else {
         Serial.println("WiFi not connected");
     }
+}
+
+
+void checkMacAddressWithServer() {
+  // Ensure the device is connected to Wi-Fi
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("Not connected to WiFi");
+    return;
+  }
+
+  HTTPClient http;
+  http.begin("https://logs-foem.onrender.com/api/pingModule"); // Modify for HTTPS if needed
+  int httpResponseCode = http.GET();
+
+  if (httpResponseCode == HTTP_CODE_OK) {
+    String response = http.getString();
+    StaticJsonDocument<256> doc;
+    deserializeJson(doc, response);
+
+    String macAddress = WiFi.macAddress();
+    if (doc["macAddress"].as<String>() == macAddress) {
+      Serial.println("MAC address matches. Sending pong back to server.");
+
+      sendPongBack(macAddress); 
+    } else {
+      Serial.println("MAC address does not match.");
+    }
+  } else {
+    Serial.print("Failed to get ping: ");
+    Serial.println(http.errorToString(httpResponseCode));
+  }
+
+  http.end();
+}
+
+void sendPongBack(const String& macAddress) {
+  WiFiClientSecure client;
+  client.setInsecure(); 
+  HTTPClient httpPong;
+  httpPong.begin(client, "https://logs-foem.onrender.com/api/pongReceivedFromModule");
+  httpPong.addHeader("Content-Type", "application/json");
+
+ 
+  StaticJsonDocument<256> pongDoc;
+  pongDoc["message"] = "sucsses";
+  pongDoc["macAddress"] = macAddress; 
+
+  String pongPayload;
+  serializeJson(pongDoc, pongPayload);
+
+  int pongResponseCode = httpPong.POST(pongPayload);
+
+  if (pongResponseCode == HTTP_CODE_OK) {
+    Serial.println("Pong sent successfully.");
+  } else {
+    Serial.print("Error sending pong: ");
+    Serial.println(httpPong.errorToString(pongResponseCode));
+    Serial.println(pongResponseCode);
+  }
+
+  httpPong.end(); 
 }
