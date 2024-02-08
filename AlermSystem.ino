@@ -83,7 +83,11 @@ void setup()
   server.on("/save-cities", HTTP_GET, handleDisplaySavedCities);
   server.on("/change-id", HTTP_POST, handleChangeId);
   server.on("/activateLed", HTTP_POST, ledIsOn);
-
+  server.on("/resetDevice", HTTP_POST, []() {
+    server.send(200, "text/plain", "Resetting device..."); // Send response
+    delay(1000); 
+    ESP.restart();
+  });
   server.begin();
   Serial.println("HTTP server started");
 
@@ -216,8 +220,7 @@ void handleInfo()
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">  TestPingWhitMacAddresses();
-
+    <meta charset="UTF-8">  
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Info Page</title>
     <style>
@@ -330,15 +333,14 @@ void handleInfo()
   server.send(200, "text/html", htmlContent);
 }
 
-void handleTest()
-{
+void handleTest() {
   String htmlContent = R"(
     <!DOCTYPE html>
     <html lang="en">
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Info Page</title>
+        <title>Test Page</title>
         <style>
             body {
                 font-family: Arial, sans-serif;
@@ -348,33 +350,28 @@ void handleTest()
                 color: #333;
             }
             button {
-            display: block;
-            width: 200px;
-            padding: 10px;
-            margin: 20px auto;
-            background-color: #007bff;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 16px;
-            transition: background-color 0.2s;
-        }
-            button:hover {
-            background-color: #0056b3;
-        }
-            h1 {
-                color: #444;
+                display: block;
+                width: 200px;
+                padding: 10px;
+                margin: 20px auto;
+                background-color: #007bff;
+                color: white;
+                border: none;
+                border-radius: 5px;
+                cursor: pointer;
+                font-size: 16px;
+                transition: background-color 0.2s;
             }
-            nav ul {
-        list-style-type: none; 
-        display: flex; 
-        flex-direction:row;
-        justify-content:space-around; 
-         padding-right: 0px;  
-        padding-left: 0px;        
-      
-            
+            button:hover {
+                background-color: #0056b3;
+            }
+               nav ul {
+        list-style-type: none;
+        display: flex;
+        flex-direction: row;
+        justify-content: space-around;
+        padding-right: 0px;
+        padding-left: 0px;
     }
     nav li {
         background-color: #fff;
@@ -384,15 +381,14 @@ void handleTest()
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
     nav a {
-        color: black; 
+        color: black;
         text-decoration: none;
         font-weight: bold;
     }
-
         </style>
     </head>
     <body>
-    <nav>
+ <nav>
         <ul>
           <li><a href="/" ${currentRoute === "/" ? 'style="font-weight:bold;"' : ""}>Home</a></li>
           <li><a href="/save-cities" ${currentRoute === "/cities" ? 'style="font-weight:bold;"' : ""}>Cities</a></li>
@@ -400,26 +396,39 @@ void handleTest()
           <li><a href="/info" ${currentRoute === "/Info" ? 'style="font-weight:bold;"' : ""}>Info</a></li>
 
         </ul>
-    </nav>      
-        <button id="activateLedButton">Test LED</button>
-
-    </body>
-     <script>
-        document.getElementById('activateLedButton').addEventListener('click', function() {
-          fetch('/activateLed', { method: 'POST' })
-            .then(response => response.text())
-            .then(data => {
-              console.log(data);
-              // Add any additional logic you want to perform after the LEDs are activated
-            })
-            .catch(error => {
-              console.error('Error:', error);
-            });
-        });
-      </script>
+    </nav>
     
+        <button id="activateLedButton">Test LED</button>
+        <button id="resetButton">Reset Device</button>
+        <script>
+            document.getElementById('activateLedButton').addEventListener('click', function() {
+                fetch('/activateLed', { method: 'POST' })
+                    .then(response => response.text())
+                    .then(data => {
+                        console.log(data);
+                        // Additional logic after LEDs are activated
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                    });
+            });
+            document.getElementById('resetButton').addEventListener('click', function() {
+                fetch('/resetDevice', { method: 'POST' })
+                    .then(response => {
+                        if(response.ok) {
+                            console.log('Device is resetting...');
+                        } else {
+                            throw new Error('Failed to reset device');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                    });
+            });
+        </script>
+    </body>
     </html>
-    )";
+  )";
 
   server.send(200, "text/html", htmlContent);
 }
@@ -1028,9 +1037,15 @@ void PingTestWhitMacAddresses()
     }
     else if (doc["macAddress"].as<String>() == macAddress && doc["testType"].as<String>() == "LedTest")
     {
-      Serial.println("test led sucsses");
+      Serial.println("Test led sucsses");
       sendPongBack(macAddress);
       ledIsOn();
+    }
+     else if (doc["macAddress"].as<String>() == macAddress && doc["testType"].as<String>() == "Reset")
+    {
+      Serial.println("Reset sucsses");
+      sendPongBack(macAddress);
+     ESP.restart();
     }
     else
     {
