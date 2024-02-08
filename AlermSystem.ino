@@ -13,17 +13,17 @@
 #include <time.h>
 
 // Constants for LED configurationactivateTestLedByMacAdrress
-#define LED_PIN     25
-#define NUM_LEDS    30
-#define BRIGHTNESS  50
-#define LED_TYPE    WS2812B
+#define LED_PIN 25
+#define NUM_LEDS 30
+#define BRIGHTNESS 50
+#define LED_TYPE WS2812B
 #define COLOR_ORDER GRB
 
 // Global Variables
 CRGB leds[NUM_LEDS];
 String cityAlermLog = "";
 String targetCities[4];
-const char* apiEndpoint = "https://www.oref.org.il/WarningMessages/alert/alerts.json";
+const char *apiEndpoint = "https://www.oref.org.il/WarningMessages/alert/alerts.json";
 String savedCitiesJson;
 String moduleName;
 String macAddress = WiFi.macAddress();
@@ -32,10 +32,9 @@ String ipAddress = WiFi.localIP().toString();
 Preferences preferences;
 WebServer server(80);
 
-const char* ntpServer = "pool.ntp.org";
+const char *ntpServer = "pool.ntp.org";
 const long gmtOffset_sec = 2 * 3600;
-const int   daylightOffset_sec = 3600;
-
+const int daylightOffset_sec = 3600;
 
 // Function Declarations
 void connectToWifi();
@@ -56,7 +55,8 @@ String getFormattedTime();
 void registerModule();
 void handleTriggerLed();
 void PingTestWhitMacAddresses();
-void setup() {
+void setup()
+{
   FastLED.addLeds<LED_TYPE, LED_PIN, COLOR_ORDER>(leds, NUM_LEDS).setCorrection(TypicalLEDStrip);
   FastLED.setBrightness(BRIGHTNESS);
   Serial.begin(115200);
@@ -65,7 +65,8 @@ void setup() {
   preferences.begin("alerm", false);
   moduleName = preferences.getString("moduleName", ""); // Use default value if not found
 
-  if (moduleName == "") {
+  if (moduleName == "")
+  {
     moduleName = String((uint32_t)ESP.getEfuseMac(), HEX);
   }
 
@@ -91,30 +92,36 @@ void setup() {
   PermanentUrl();
 }
 
-void loop() {
+void loop()
+{
   makeApiRequest();
   PingTestWhitMacAddresses();
   server.handleClient();
 }
 
-
-//url to choose cities http://alerm.local/
-void PermanentUrl() {
-  if (!MDNS.begin("alerm")) {
+// url to choose cities http://alerm.local/
+void PermanentUrl()
+{
+  if (!MDNS.begin("alerm"))
+  {
     Serial.println("Error setting up MDNS responder!");
-  } else {
+  }
+  else
+  {
     Serial.println("mDNS responder started");
     MDNS.addService("http", "tcp", 80);
   }
 }
 
-
-void saveCitiesToPreferences() {
+void saveCitiesToPreferences()
+{
   DynamicJsonDocument doc(4096);
   JsonArray array = doc.to<JsonArray>();
 
-  for (int i = 0; i < sizeof(targetCities) / sizeof(targetCities[0]); i++) {
-    if (targetCities[i] != "") {
+  for (int i = 0; i < sizeof(targetCities) / sizeof(targetCities[0]); i++)
+  {
+    if (targetCities[i] != "")
+    {
       array.add(targetCities[i]);
     }
   }
@@ -128,7 +135,8 @@ void saveCitiesToPreferences() {
   preferences.end();
 }
 
-void loadCitiesFromPreferences() {
+void loadCitiesFromPreferences()
+{
   size_t maxCities = sizeof(targetCities) / sizeof(targetCities[0]);
 
   preferences.begin("my-app", true);
@@ -140,60 +148,65 @@ void loadCitiesFromPreferences() {
   JsonArray array = doc.as<JsonArray>();
 
   size_t cityIndex = 0;
-  for (JsonVariant city : array) {
-    if (cityIndex < maxCities) {
+  for (JsonVariant city : array)
+  {
+    if (cityIndex < maxCities)
+    {
       targetCities[cityIndex++] = city.as<String>();
     }
   }
-  for (int j = 0; j < 1; j++) {
+  for (int j = 0; j < 1; j++)
+  {
     String logMessage = "Target cities: ";
 
     // Constructing the list of target cities
-    for (int i = 0; i < sizeof(targetCities) / sizeof(targetCities[0]); i++) {
-      logMessage += targetCities[i];  // Add the city to the log message
-      if (i < sizeof(targetCities) / sizeof(targetCities[0]) - 1) {
-        logMessage += ", ";  
+    for (int i = 0; i < sizeof(targetCities) / sizeof(targetCities[0]); i++)
+    {
+      logMessage += targetCities[i]; // Add the city to the log message
+      if (i < sizeof(targetCities) / sizeof(targetCities[0]) - 1)
+      {
+        logMessage += ", ";
       }
     }
 
-    logMessage += " for module: " + moduleName + " "; 
+    logMessage += " for module: " + moduleName + " ";
 
     // Now send the log
     sendLog(logMessage);
   }
-
 }
 
-
-
-
-void configModeCallback (WiFiManager * myWiFiManager) {
+void configModeCallback(WiFiManager *myWiFiManager)
+{
   Serial.println("Entered config mode");
   Serial.println(WiFi.softAPIP());
   Serial.println(myWiFiManager->getConfigPortalSSID());
 }
 
-
-void connectToWifi() {
+void connectToWifi()
+{
   WiFiManager wifiManager;
   wifiManager.setAPCallback(configModeCallback);
-  String ssid = "Alerm System " + String((uint32_t)ESP.getEfuseMac(), HEX); 
+  String ssid = "Alerm System " + String((uint32_t)ESP.getEfuseMac(), HEX);
 
   Serial.println("Connecting to: " + ssid);
 
-  if (!wifiManager.autoConnect(ssid.c_str())) { 
+  if (!wifiManager.autoConnect(ssid.c_str()))
+  {
     Serial.println("Failed to connect and hit timeout");
     delay(3000);
     ESP.restart();
-  } else {
+  }
+  else
+  {
     Serial.println("Success: Connected to WiFi");
     Serial.print("IP Address: ");
     Serial.println(WiFi.localIP());
-
   }
 }
 
-void handleInfo() {
+void handleInfo()
+{
   String wifiName = WiFi.SSID();
   uint32_t chipId = ESP.getEfuseMac();
   IPAddress ip = WiFi.localIP();
@@ -296,10 +309,14 @@ void handleInfo() {
 </nav>
 <div>
     <h2>Module Details:</h2>
-    <p>WiFi Name: )" + wifiName + R"(</p>
-    <p>Module Name: )" + moduleName + R"(</p>
-    <p>IP Address: )" + ip.toString() + R"(</p>
-    <p>MAC Address: )" + macAddress + R"(</p>
+    <p>WiFi Name: )" + wifiName +
+                       R"(</p>
+    <p>Module Name: )" +
+                       moduleName + R"(</p>
+    <p>IP Address: )" + ip.toString() +
+                       R"(</p>
+    <p>MAC Address: )" +
+                       macAddress + R"(</p>
 </div>
 <form id="changeID" action="/change-id" method="POST">
     <label for="newId">Change Name:</label>
@@ -313,8 +330,8 @@ void handleInfo() {
   server.send(200, "text/html", htmlContent);
 }
 
-
-void handleTest() {
+void handleTest()
+{
   String htmlContent = R"(
     <!DOCTYPE html>
     <html lang="en">
@@ -407,11 +424,8 @@ void handleTest() {
   server.send(200, "text/html", htmlContent);
 }
 
-
-
-
-
-void handleRoot() {
+void handleRoot()
+{
   String htmlContent = R"(
 <!DOCTYPE html>
 <html lang='en'>
@@ -516,10 +530,11 @@ nav ul {
 
         </ul>
     </nav>
-    <h2>שם:  )" + moduleName + R"(</h2>
+    <h2>שם:  )" + moduleName +
+                       R"(</h2>
 )";
 
-htmlContent += R"(
+  htmlContent += R"(
     <input type='text' id='filterInput' placeholder='חפש איזורים...'>
     <form id='cityForm'>
         <div id='cityList'></div>
@@ -580,18 +595,18 @@ htmlContent += R"(
 </html>
 )";
 
-// Send the HTML content
-server.send(200, "text/html", htmlContent);
-
+  // Send the HTML content
+  server.send(200, "text/html", htmlContent);
 
   server.send(200, "text/html", htmlContent);
 }
 
-void handleDisplaySavedCities() {
+void handleDisplaySavedCities()
+{
   // Parse the JSON
-  DynamicJsonDocument doc(1024); 
+  DynamicJsonDocument doc(1024);
   deserializeJson(doc, savedCitiesJson);
-  
+
   JsonArray cities = doc["cities"].as<JsonArray>();
 
   String responseHtml = R"(
@@ -688,8 +703,10 @@ nav ul {
     <ul>
 )";
 
- for (int i = 0; i < sizeof(targetCities) / sizeof(targetCities[0]); i++) {
-    if (targetCities[i] != "") {  
+  for (int i = 0; i < sizeof(targetCities) / sizeof(targetCities[0]); i++)
+  {
+    if (targetCities[i] != "")
+    {
       responseHtml += "<li>" + targetCities[i] + "</li>";
     }
   }
@@ -704,10 +721,10 @@ nav ul {
   server.send(200, "text/html", responseHtml);
 }
 
-
-
-void handleChangeId() {
-  if (server.hasArg("newId")) {
+void handleChangeId()
+{
+  if (server.hasArg("newId"))
+  {
     moduleName = server.arg("newId"); // Update the moduleName with the new value
     Serial.println("ID changed to: " + moduleName);
 
@@ -719,13 +736,17 @@ void handleChangeId() {
     // Redirect back to the root page
     server.sendHeader("Location", "/", true);
     server.send(302, "text/plain", "");
-  } else {
+  }
+  else
+  {
     server.send(400, "text/plain", "Bad Request: newId not provided");
   }
 }
 
-void handleSaveCities() {
-  if (server.hasArg("plain")) {
+void handleSaveCities()
+{
+  if (server.hasArg("plain"))
+  {
     String requestBody = server.arg("plain");
     Serial.println("Received cities to save: " + requestBody);
 
@@ -734,13 +755,16 @@ void handleSaveCities() {
     JsonArray cities = doc["cities"].as<JsonArray>();
 
     // Clear existing cities
-    for (int i = 0; i < sizeof(targetCities) / sizeof(targetCities[0]); i++) {
+    for (int i = 0; i < sizeof(targetCities) / sizeof(targetCities[0]); i++)
+    {
       targetCities[i] = ""; // Clear existing city
     }
 
     int index = 0;
-    for (JsonVariant city : cities) {
-      if (index < (sizeof(targetCities) / sizeof(targetCities[0]))) {
+    for (JsonVariant city : cities)
+    {
+      if (index < (sizeof(targetCities) / sizeof(targetCities[0])))
+      {
         targetCities[index] = city.as<String>();
         index++;
       }
@@ -749,28 +773,34 @@ void handleSaveCities() {
     saveCitiesToPreferences();
 
     server.sendHeader("Location", "/save-cities", true);
-    server.send(302, "text/plain", ""); 
-  } else {
+    server.send(302, "text/plain", "");
+  }
+  else
+  {
     server.send(400, "text/plain", "Bad Request");
   }
-for (int j = 0; j < 1; j++) {
+  for (int j = 0; j < 1; j++)
+  {
     String logMessage = "Target city change To: ";
 
-    for (int i = 0; i < sizeof(targetCities) / sizeof(targetCities[0]); i++) {
-        logMessage += targetCities[i];  
-        if (i < sizeof(targetCities) / sizeof(targetCities[0]) - 1) {
-            logMessage += ", ";  
-        }
+    for (int i = 0; i < sizeof(targetCities) / sizeof(targetCities[0]); i++)
+    {
+      logMessage += targetCities[i];
+      if (i < sizeof(targetCities) / sizeof(targetCities[0]) - 1)
+      {
+        logMessage += ", ";
+      }
     }
 
-    logMessage += " for module: " + moduleName+" ";  
+    logMessage += " for module: " + moduleName + " ";
     sendLog(logMessage);
+  }
 }
 
-}
-
-void makeApiRequest() {
-  if (WiFi.status() == WL_CONNECTED) {
+void makeApiRequest()
+{
+  if (WiFi.status() == WL_CONNECTED)
+  {
     HTTPClient http;
     WiFiClientSecure client;
     client.setInsecure();
@@ -780,26 +810,29 @@ void makeApiRequest() {
     http.addHeader("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.100 Safari/537.36");
 
     int httpCode = http.GET();
-//    Serial.print("HTTP Status Code: ");
-//    Serial.println(httpCode);
+    //    Serial.print("HTTP Status Code: ");
+    //    Serial.println(httpCode);
 
-    if (httpCode == 200) {
+    if (httpCode == 200)
+    {
       String payload = http.getString();
-//      Serial.println("Server response:");
+      //      Serial.println("Server response:");
       Serial.println(payload);
 
-      if (payload.startsWith("\xEF\xBB\xBF")) {
+      if (payload.startsWith("\xEF\xBB\xBF"))
+      {
         payload = payload.substring(3); // Remove BOM
       }
-      for (int i = 0; i < sizeof(targetCities) / sizeof(targetCities[0]); i++) {
-//        Serial.println("Target city: " + targetCities[i]);
-
+      for (int i = 0; i < sizeof(targetCities) / sizeof(targetCities[0]); i++)
+      {
+        //        Serial.println("Target city: " + targetCities[i]);
       }
 
       DynamicJsonDocument doc(4096);
       DeserializationError error = deserializeJson(doc, payload);
 
-      if (!error) {
+      if (!error)
+      {
 
         JsonArray dataArray = doc["data"].as<JsonArray>();
         String jsonArrayAsString;
@@ -808,110 +841,135 @@ void makeApiRequest() {
 
         bool alertDetected = false;
 
-        for (JsonVariant cityValue : dataArray) {
-          for (String city : targetCities) {
+        for (JsonVariant cityValue : dataArray)
+        {
+          for (String city : targetCities)
+          {
             Serial.println(city + " compare with " + cityValue.as<String>());
 
-            if (cityValue.as<String>() == city) {
+            if (cityValue.as<String>() == city)
+            {
               alertDetected = true;
               Serial.println("Alert for: " + city);
               cityAlermLog = city;
               break;
             }
           }
-          if (alertDetected) {
-            break; 
+          if (alertDetected)
+          {
+            break;
           }
         }
 
-        if (alertDetected) {
+        if (alertDetected)
+        {
           Serial.println("Triggering alarm...");
           ledIsOn();
-          sendLog("alerm active at "+moduleName+" in city:" + cityAlermLog);
-
-        } else {
+          sendLog("alerm active at " + moduleName + " in city:" + cityAlermLog);
+        }
+        else
+        {
           Serial.println("No alert for target cities.");
         }
-      } else {
-//        Serial.print("deserializeJson() failed: ");
-//        Serial.println(error.c_str());
       }
-    } else {
+      else
+      {
+        //        Serial.print("deserializeJson() failed: ");
+        //        Serial.println(error.c_str());
+      }
+    }
+    else
+    {
       Serial.print("HTTP request failed, error: ");
       Serial.println(http.errorToString(httpCode));
     }
     leds[0] = CRGB::Green;
     FastLED.show();
     http.end();
-  } else {
-//    Serial.println("Disconnected from WiFi. Trying to reconnect...");
+  }
+  else
+  {
+    //    Serial.println("Disconnected from WiFi. Trying to reconnect...");
   }
   delay(1000);
 }
 
-String getFormattedTime() {
+String getFormattedTime()
+{
   struct tm timeinfo;
   int retry = 0;
-  const int retry_count = 3; 
-  while (!getLocalTime(&timeinfo) && ++retry < retry_count) {
+  const int retry_count = 3;
+  while (!getLocalTime(&timeinfo) && ++retry < retry_count)
+  {
     Serial.println("Failed to obtain time, retrying...");
     delay(500); // Wait half a second before retrying
   }
 
-  if (retry >= retry_count) {
+  if (retry >= retry_count)
+  {
     Serial.println("Failed to obtain time after several attempts");
     return "";
   }
 
-  char timeStringBuff[80]; //80 chars should be enough
+  char timeStringBuff[80]; // 80 chars should be enough
   strftime(timeStringBuff, sizeof(timeStringBuff), " %Y-%m-%dT%H:%M:%SZ ", &timeinfo);
   Serial.println(timeStringBuff); // Print the time to the Serial monitor
   return String(timeStringBuff);
 }
 
+void sendLog(String logMessage)
+{
+  String timestamp = getFormattedTime();
 
-void sendLog(String logMessage) {
-  String timestamp = getFormattedTime(); 
-  
-  if (WiFi.status() == WL_CONNECTED) {
+  if (WiFi.status() == WL_CONNECTED)
+  {
     HTTPClient http;
     http.begin("https://logs-foem.onrender.com/api/logs");
     http.addHeader("Content-Type", "application/json");
-    
+
     String requestBody = "{\"log\": \"" + logMessage + "\", \"timestamp\": \"" + timestamp + "\", \"macAddress\": \"" + macAddress + "\"}";
-    Serial.println("Request Body: " + requestBody); 
+    Serial.println("Request Body: " + requestBody);
     int httpResponseCode = http.POST(requestBody);
-  
-    if (httpResponseCode > 0) {
+
+    if (httpResponseCode > 0)
+    {
       Serial.print("HTTP Response code: ");
       Serial.println(httpResponseCode);
       String response = http.getString();
-      Serial.println("Response: " + response); 
-    } else {
+      Serial.println("Response: " + response);
+    }
+    else
+    {
       Serial.print("Error code: ");
       Serial.println(httpResponseCode);
-      Serial.println("Error: " + http.errorToString(httpResponseCode)); 
+      Serial.println("Error: " + http.errorToString(httpResponseCode));
     }
-  
-    http.end(); 
-  } else {
+
+    http.end();
+  }
+  else
+  {
     Serial.println("WiFi not connected");
   }
 }
-void ledIsOn() {
-  int blinkDurationInSeconds = 10; 
-  int blinkSpeedInMillis = 100; 
+void ledIsOn()
+{
+  int blinkDurationInSeconds = 10;
+  int blinkSpeedInMillis = 100;
 
   int numberOfBlinks = (blinkDurationInSeconds * 1000) / (blinkSpeedInMillis * 2);
 
-  for (int j = 0; j < numberOfBlinks; j++) {
-    for (int i = 0; i < NUM_LEDS; i++) {
-      leds[i] = CRGB::Red; 
+  for (int j = 0; j < numberOfBlinks; j++)
+  {
+    for (int i = 0; i < NUM_LEDS; i++)
+    {
+      leds[i] = CRGB::Red;
     }
     FastLED.show();
     delay(blinkSpeedInMillis);
 
-    for (int i = 0; i < NUM_LEDS; i++) {
+    for (int i = 0; i < NUM_LEDS; i++)
+    {
       leds[i] = CRGB::Black;
     }
     FastLED.show();
@@ -919,86 +977,97 @@ void ledIsOn() {
   }
 }
 
-void registerModule() {
-    IPAddress ip = WiFi.localIP();
+void registerModule()
+{
+  IPAddress ip = WiFi.localIP();
 
-    if (WiFi.status() == WL_CONNECTED) {
-        HTTPClient http;
-        http.begin("https://logs-foem.onrender.com/api/register");
-        http.addHeader("Content-Type", "application/json");
-        String requestBody = "{\"moduleName\": \"" + moduleName + "\", \"ipAddress\": \"" + ip.toString() + "\", \"macAddress\": \"" + macAddress + "\"}";
+  if (WiFi.status() == WL_CONNECTED)
+  {
+    HTTPClient http;
+    http.begin("https://logs-foem.onrender.com/api/register");
+    http.addHeader("Content-Type", "application/json");
+    String requestBody = "{\"moduleName\": \"" + moduleName + "\", \"ipAddress\": \"" + ip.toString() + "\", \"macAddress\": \"" + macAddress + "\"}";
 
-        int httpResponseCode = http.POST(requestBody);
-        
-        if (httpResponseCode == HTTP_CODE_OK) {
-            Serial.println("Module registered successfully: " + moduleName);
-        } else {
-            Serial.println("Failed to register module: " + moduleName);
-            Serial.println("Error code: " + httpResponseCode);
-        }
-        http.end();
+    int httpResponseCode = http.POST(requestBody);
+
+    if (httpResponseCode == HTTP_CODE_OK)
+    {
+      Serial.println("Module registered successfully: " + moduleName);
     }
+    else
+    {
+      Serial.println("Failed to register module: " + moduleName);
+      Serial.println("Error code: " + httpResponseCode);
+    }
+    http.end();
+  }
 }
-  
 
-
-void PingTestWhitMacAddresses() {
-  if (WiFi.status() != WL_CONNECTED) {
+void PingTestWhitMacAddresses()
+{
+  if (WiFi.status() != WL_CONNECTED)
+  {
     Serial.println("Not connected to WiFi");
     return;
   }
   HTTPClient http;
-  http.begin("https://logs-foem.onrender.com/api/pingModule"); 
+  http.begin("https://logs-foem.onrender.com/api/pingModule");
   int httpResponseCode = http.GET();
 
-  if (httpResponseCode == HTTP_CODE_OK) {
+  if (httpResponseCode == HTTP_CODE_OK)
+  {
     String response = http.getString();
     StaticJsonDocument<256> doc;
     deserializeJson(doc, response);
 
     String macAddress = WiFi.macAddress();
-    if (doc["macAddress"].as<String>() == macAddress&&doc["testType"].as<String>()=="PingTest") {
+    if (doc["macAddress"].as<String>() == macAddress && doc["testType"].as<String>() == "PingTest")
+    {
       Serial.println("MAC address matches. Sending pong back to server.");
-      sendPongBack(macAddress); 
-    }else if (doc["macAddress"].as<String>() == macAddress&&doc["testType"].as<String>()=="LedTest"){
-                  Serial.println("test led sucsses");
-                  sendPongBack(macAddress); 
-                  ledIsOn();
-      
-      
-    }else {
+      sendPongBack(macAddress);
+    }
+    else if (doc["macAddress"].as<String>() == macAddress && doc["testType"].as<String>() == "LedTest")
+    {
+      Serial.println("test led sucsses");
+      sendPongBack(macAddress);
+      ledIsOn();
+    }
+    else
+    {
       Serial.println("MAC address does not match.");
     }
-  } 
+  }
 
   http.end();
 }
 
-void sendPongBack(const String& macAddress) {
+void sendPongBack(const String &macAddress)
+{
   WiFiClientSecure client;
-  client.setInsecure(); 
+  client.setInsecure();
   HTTPClient httpPong;
   httpPong.begin(client, "https://logs-foem.onrender.com/api/pongReceivedFromModule");
   httpPong.addHeader("Content-Type", "application/json");
 
-
   StaticJsonDocument<256> pongDoc;
   pongDoc["message"] = "sucsses";
-  pongDoc["macAddress"] = macAddress; 
+  pongDoc["macAddress"] = macAddress;
 
   String pongPayload;
   serializeJson(pongDoc, pongPayload);
 
   int pongResponseCode = httpPong.POST(pongPayload);
 
-  if (pongResponseCode == HTTP_CODE_OK) {
+  if (pongResponseCode == HTTP_CODE_OK)
+  {
     Serial.println("Pong sent successfully.");
-  } else {
+  }
+  else
+  {
     Serial.print("Error sending pong: ");
     Serial.println(httpPong.errorToString(pongResponseCode));
     Serial.println(pongResponseCode);
   }
 
-  httpPong.end(); 
-  
+  httpPong.end();
 }
