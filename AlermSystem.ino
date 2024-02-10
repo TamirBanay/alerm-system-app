@@ -992,6 +992,7 @@ void registerModule()
 
   if (WiFi.status() == WL_CONNECTED)
   {
+    
     HTTPClient http;
     http.begin("https://logs-foem.onrender.com/api/register");
     http.addHeader("Content-Type", "application/json");
