@@ -11,6 +11,7 @@
 #include <ESPmDNS.h>
 #include <HTTPClient.h>
 #include <time.h>
+#include <ESPAsyncWebServer.h>
 
 // Constants for LED configurationactivateTestLedByMacAdrress
 #define LED_PIN 25
@@ -30,7 +31,8 @@ String macAddress = WiFi.macAddress();
 String ipAddress = WiFi.localIP().toString();
 
 Preferences preferences;
-WebServer server(80);
+WebServer server(90);
+AsyncWebServer serverAsyn(80);
 
 const char *ntpServer = "pool.ntp.org";
 const long gmtOffset_sec = 2 * 3600;
@@ -38,18 +40,18 @@ const int daylightOffset_sec = 3600;
 
 // Function Declarations
 void connectToWifi();
-void handleRoot();
-void handleInfo();
-void handleTest();
+void handleRoot(AsyncWebServerRequest *request);
+void handleInfo(AsyncWebServerRequest *request);
+void handleTest(AsyncWebServerRequest *request);
 void makeApiRequest();
 void ledIsOn();
 void PermanentUrl();
 void saveCitiesToPreferences();
 void loadCitiesFromPreferences();
 void configModeCallback(WiFiManager *myWiFiManager);
-void handleDisplaySavedCities();
-void handleSaveCities();
-void handleChangeId();
+void handleDisplaySavedCities(AsyncWebServerRequest *request);
+void handleSaveCities(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total);
+void handleChangeId(AsyncWebServerRequest *request);
 void sendLog(String);
 String getFormattedTime();
 void registerModule();
@@ -76,19 +78,46 @@ void setup()
   sendLog("Module " + moduleName + " Is Connected");
 
   // Start the web server
-  server.on("/", HTTP_GET, handleRoot);
-  server.on("/info", HTTP_GET, handleInfo);
-  server.on("/test", HTTP_GET, handleTest);
-  server.on("/save-cities", HTTP_POST, handleSaveCities);
-  server.on("/save-cities", HTTP_GET, handleDisplaySavedCities);
-  server.on("/change-id", HTTP_POST, handleChangeId);
-  server.on("/activateLed", HTTP_POST, ledIsOn);
-  server.on("/resetDevice", HTTP_POST, []() {
-    server.send(200, "text/plain", "Resetting device..."); // Send response
-    delay(1000); 
+
+  serverAsyn.on("/", HTTP_GET, [](AsyncWebServerRequest * request)
+  {
+    handleRoot(request);
+  });
+
+  serverAsyn.on("/info", HTTP_GET, [](AsyncWebServerRequest * request) {
+    handleInfo(request);
+  });
+
+  serverAsyn.on("/test", HTTP_GET, [](AsyncWebServerRequest * request)
+  {
+    handleTest(request);
+  });
+
+  serverAsyn.on("/save-new-cities", HTTP_POST, [](AsyncWebServerRequest *request) {
+  }, NULL, handleSaveCities); 
+
+
+  serverAsyn.on("/save-cities", HTTP_GET, [](AsyncWebServerRequest * request)
+  {
+    handleDisplaySavedCities(request);
+  });
+
+  serverAsyn.on("/change-id", HTTP_POST, [](AsyncWebServerRequest * request)
+  {
+    handleChangeId(request);
+  });
+
+  serverAsyn.on("/activateLed", HTTP_POST, [](AsyncWebServerRequest * request)
+  {
+    ledIsOn();
+  });
+
+  serverAsyn.on("/resetDevice", HTTP_POST, [](AsyncWebServerRequest * request)
+  { delay(1000);
     ESP.restart();
   });
-  server.begin();
+
+  serverAsyn.begin();
   Serial.println("HTTP server started");
 
   // Load saved cities and set up MDNS
@@ -100,8 +129,10 @@ void loop()
 {
   makeApiRequest();
   PingTestWhitMacAddresses();
-  server.handleClient();
 }
+
+
+
 
 // url to choose cities http://alerm.local/
 void PermanentUrl()
@@ -115,6 +146,72 @@ void PermanentUrl()
     Serial.println("mDNS responder started");
     MDNS.addService("http", "tcp", 80);
   }
+}
+
+
+void handleSaveCities(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+  static String bodyData; // Static to retain the value between calls
+
+  if (index == 0) {
+    Serial.println("Receiving body data...");
+    bodyData = ""; // Clear previous data
+  }
+
+  // Append current chunk to the bodyData string
+  for(size_t i = 0; i < len; i++) {
+    bodyData += (char)data[i];
+  }
+
+  // Once the last chunk is received, process the entire body
+  if (index + len == total) {
+    Serial.println("Body received completely.");
+    Serial.println(bodyData);
+
+    DynamicJsonDocument doc(1024);
+    DeserializationError error = deserializeJson(doc, bodyData);
+    if (error) {
+      Serial.println("Parsing JSON failed!");
+      request->send(400, "text/plain", "Invalid JSON");
+      return;
+    }
+
+    JsonArray cities = doc["cities"].as<JsonArray>();
+
+    for (int i = 0; i < sizeof(targetCities) / sizeof(targetCities[0]); i++)
+        {
+          targetCities[i] = ""; // Clear existing city
+        }
+
+    size_t i = 0;
+    for (JsonVariant city : cities) {
+      if (i < (sizeof(targetCities) / sizeof(targetCities[0]))) {
+        targetCities[i] = city.as<String>(); // Store city in the array
+        Serial.println("City: " + targetCities[i]);
+        i++;
+      }
+    }
+
+    saveCitiesToPreferences();
+
+    request->send(200, "application/json", "{\"message\":\"Cities received and processed.\"}");
+        String logMessage = "Target city change To: ";
+
+
+for (int i = 0; i < sizeof(targetCities) / sizeof(targetCities[0]); i++)
+    {
+      logMessage += targetCities[i];
+      if (i < sizeof(targetCities) / sizeof(targetCities[0]) - 1)
+      {
+        logMessage += ", ";
+      }
+    }
+
+    logMessage += " for module: " + moduleName + " ";
+    sendLog(logMessage);
+
+  
+  }
+  
 }
 
 void saveCitiesToPreferences()
@@ -209,7 +306,7 @@ void connectToWifi()
   }
 }
 
-void handleInfo()
+void handleInfo(AsyncWebServerRequest *request)
 {
   String wifiName = WiFi.SSID();
   uint32_t chipId = ESP.getEfuseMac();
@@ -330,10 +427,11 @@ void handleInfo()
 </html>
 )";
 
-  server.send(200, "text/html", htmlContent);
+  request->send(200, "text/html", htmlContent);
 }
 
-void handleTest() {
+void handleTest(AsyncWebServerRequest *request)
+{
   String htmlContent = R"(
     <!DOCTYPE html>
     <html lang="en">
@@ -430,11 +528,11 @@ void handleTest() {
     </html>
   )";
 
-  server.send(200, "text/html", htmlContent);
+  request->send(200, "text/html", htmlContent);
 }
 
-void handleRoot()
-{
+void handleRoot(AsyncWebServerRequest *request) {
+
   String htmlContent = R"(
 <!DOCTYPE html>
 <html lang='en'>
@@ -551,11 +649,11 @@ nav ul {
     </form>
    
            <script>
-        document.getElementById('cityForm').onsubmit = function(event) {
+  document.getElementById('cityForm').onsubmit = function(event) {
             event.preventDefault();
             var checkedBoxes = document.querySelectorAll('input[name=city]:checked');
             var targetCities = Array.from(checkedBoxes).map(box => box.value);
-            fetch('/save-cities', {
+            fetch('/save-new-cities', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ cities: targetCities })
@@ -569,6 +667,9 @@ nav ul {
                 console.error('Error:', error);
             });
         };
+
+
+
 
         document.getElementById('filterInput').oninput = function() {
             var filter = this.value.toUpperCase();
@@ -605,12 +706,11 @@ nav ul {
 )";
 
   // Send the HTML content
-  server.send(200, "text/html", htmlContent);
 
-  server.send(200, "text/html", htmlContent);
+  request->send(200, "text/html", htmlContent);
 }
 
-void handleDisplaySavedCities()
+void handleDisplaySavedCities(AsyncWebServerRequest *request)
 {
   // Parse the JSON
   DynamicJsonDocument doc(1024);
@@ -727,84 +827,40 @@ nav ul {
 </html>
 )";
 
-  server.send(200, "text/html", responseHtml);
+  request->send(200, "text/html", responseHtml);
 }
 
-void handleChangeId()
-{
-  if (server.hasArg("newId"))
-  {
-    moduleName = server.arg("newId"); // Update the moduleName with the new value
-    Serial.println("ID changed to: " + moduleName);
+void handleChangeId(AsyncWebServerRequest *request) {
+    // Check if the request has a parameter named "newId" in the request body (POST) or query string (GET)
+    if (request->hasParam("newId", true)) { // true for POST parameter
+        AsyncWebParameter* p = request->getParam("newId", true);
+        moduleName = p->value(); // Update the moduleName with the new value
+        Serial.println("ID changed to: " + moduleName);
 
-    // Save the new ID to NVS
-    preferences.begin("alerm", false);
-    preferences.putString("moduleName", moduleName);
-    preferences.end();
+        // Save the new ID to NVS
+        preferences.begin("alerm", false);
+        preferences.putString("moduleName", moduleName);
+        preferences.end();
 
-    // Redirect back to the root page
-    server.sendHeader("Location", "/", true);
-    server.send(302, "text/plain", "");
-  }
-  else
-  {
-    server.send(400, "text/plain", "Bad Request: newId not provided");
-  }
+        // Redirect back to the root page
+        request->redirect("/");
+    } else if (request->hasParam("newId", false)) { // false for GET parameter
+        AsyncWebParameter* p = request->getParam("newId", false);
+        moduleName = p->value(); // Update the moduleName with the new value
+        Serial.println("ID changed to: " + moduleName);
+
+        // Save the new ID to NVS
+        preferences.begin("alerm", false);
+        preferences.putString("moduleName", moduleName);
+        preferences.end();
+
+        // Redirect back to the root page
+        request->redirect("/");
+    } else {
+        request->send(400, "text/plain", "Bad Request: newId not provided");
+    }
 }
 
-void handleSaveCities()
-{
-  if (server.hasArg("plain"))
-  {
-    String requestBody = server.arg("plain");
-    Serial.println("Received cities to save: " + requestBody);
-
-    DynamicJsonDocument doc(1024);
-    deserializeJson(doc, requestBody);
-    JsonArray cities = doc["cities"].as<JsonArray>();
-
-    // Clear existing cities
-    for (int i = 0; i < sizeof(targetCities) / sizeof(targetCities[0]); i++)
-    {
-      targetCities[i] = ""; // Clear existing city
-    }
-
-    int index = 0;
-    for (JsonVariant city : cities)
-    {
-      if (index < (sizeof(targetCities) / sizeof(targetCities[0])))
-      {
-        targetCities[index] = city.as<String>();
-        index++;
-      }
-    }
-
-    saveCitiesToPreferences();
-
-    server.sendHeader("Location", "/save-cities", true);
-    server.send(302, "text/plain", "");
-  }
-  else
-  {
-    server.send(400, "text/plain", "Bad Request");
-  }
-  for (int j = 0; j < 1; j++)
-  {
-    String logMessage = "Target city change To: ";
-
-    for (int i = 0; i < sizeof(targetCities) / sizeof(targetCities[0]); i++)
-    {
-      logMessage += targetCities[i];
-      if (i < sizeof(targetCities) / sizeof(targetCities[0]) - 1)
-      {
-        logMessage += ", ";
-      }
-    }
-
-    logMessage += " for module: " + moduleName + " ";
-    sendLog(logMessage);
-  }
-}
 
 void makeApiRequest()
 {
@@ -992,7 +1048,7 @@ void registerModule()
 
   if (WiFi.status() == WL_CONNECTED)
   {
-    
+
     HTTPClient http;
     http.begin("https://logs-foem.onrender.com/api/register");
     http.addHeader("Content-Type", "application/json");
@@ -1042,11 +1098,11 @@ void PingTestWhitMacAddresses()
       sendPongBack(macAddress);
       ledIsOn();
     }
-     else if (doc["macAddress"].as<String>() == macAddress && doc["testType"].as<String>() == "Reset")
+    else if (doc["macAddress"].as<String>() == macAddress && doc["testType"].as<String>() == "Reset")
     {
       Serial.println("Reset sucsses");
       sendPongBack(macAddress);
-     ESP.restart();
+      ESP.restart();
     }
     else
     {
