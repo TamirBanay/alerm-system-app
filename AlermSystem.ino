@@ -36,7 +36,7 @@ AsyncWebServer serverAsyn(80);
 
 const char *ntpServer = "pool.ntp.org";
 const long gmtOffset_sec = 2 * 3600;
-const int daylightOffset_sec = 3600;
+const int daylightOffset_sec = 0;
 
 // Function Declarations
 void connectToWifi();
@@ -52,9 +52,7 @@ void configModeCallback(WiFiManager *myWiFiManager);
 void handleDisplaySavedCities(AsyncWebServerRequest *request);
 void handleSaveCities(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total);
 void handleChangeId(AsyncWebServerRequest *request);
-void sendLog(String);
 String getFormattedTime();
-void registerModule();
 void handleTriggerLed();
 void PingTestWhitMacAddresses();
 void setup()
@@ -72,10 +70,8 @@ void setup()
     moduleName = String((uint32_t)ESP.getEfuseMac(), HEX);
   }
 
-  registerModule();
   preferences.end();
   configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
-  sendLog("Module " + moduleName + " Is Connected");
 
   // Start the web server
 
@@ -93,8 +89,8 @@ void setup()
     handleTest(request);
   });
 
-  serverAsyn.on("/save-new-cities", HTTP_POST, [](AsyncWebServerRequest *request) {
-  }, NULL, handleSaveCities); 
+  serverAsyn.on("/save-new-cities", HTTP_POST, [](AsyncWebServerRequest * request) {
+  }, NULL, handleSaveCities);
 
 
   serverAsyn.on("/save-cities", HTTP_GET, [](AsyncWebServerRequest * request)
@@ -123,15 +119,27 @@ void setup()
   // Load saved cities and set up MDNS
   loadCitiesFromPreferences();
   PermanentUrl();
+
+
+  sendDataToServerMongo("module is connected " + moduleName , "getModuels");
+  sendDataToServerMongo("module is connected " + moduleName , "getLogs");
+  String cities = "";
+  for (int i = 0; i < sizeof(targetCities) / sizeof(targetCities[0]); i++) {
+    cities += targetCities[i];
+    if (i < sizeof(targetCities) / sizeof(int) - 1) {
+      cities += ", ";
+    }
+  }
+  sendDataToServerMongo("tager cities for " + moduleName + " is: " + cities, "getLogs");
+
 }
 
 void loop()
 {
+  
   makeApiRequest();
   PingTestWhitMacAddresses();
 }
-
-
 
 
 // url to choose cities http://alerm.local/
@@ -158,7 +166,7 @@ void handleSaveCities(AsyncWebServerRequest *request, uint8_t *data, size_t len,
   }
 
   // Append current chunk to the bodyData string
-  for(size_t i = 0; i < len; i++) {
+  for (size_t i = 0; i < len; i++) {
     bodyData += (char)data[i];
   }
 
@@ -178,9 +186,9 @@ void handleSaveCities(AsyncWebServerRequest *request, uint8_t *data, size_t len,
     JsonArray cities = doc["cities"].as<JsonArray>();
 
     for (int i = 0; i < sizeof(targetCities) / sizeof(targetCities[0]); i++)
-        {
-          targetCities[i] = ""; // Clear existing city
-        }
+    {
+      targetCities[i] = ""; // Clear existing city
+    }
 
     size_t i = 0;
     for (JsonVariant city : cities) {
@@ -194,10 +202,10 @@ void handleSaveCities(AsyncWebServerRequest *request, uint8_t *data, size_t len,
     saveCitiesToPreferences();
 
     request->send(200, "application/json", "{\"message\":\"Cities received and processed.\"}");
-        String logMessage = "Target city change To: ";
+    String logMessage = "Target city change To: ";
 
 
-for (int i = 0; i < sizeof(targetCities) / sizeof(targetCities[0]); i++)
+    for (int i = 0; i < sizeof(targetCities) / sizeof(targetCities[0]); i++)
     {
       logMessage += targetCities[i];
       if (i < sizeof(targetCities) / sizeof(targetCities[0]) - 1)
@@ -207,11 +215,12 @@ for (int i = 0; i < sizeof(targetCities) / sizeof(targetCities[0]); i++)
     }
 
     logMessage += " for module: " + moduleName + " ";
-    sendLog(logMessage);
+    sendDataToServerMongo(logMessage, "getLogs");
 
-  
+
+
   }
-  
+
 }
 
 void saveCitiesToPreferences()
@@ -273,7 +282,8 @@ void loadCitiesFromPreferences()
     logMessage += " for module: " + moduleName + " ";
 
     // Now send the log
-    sendLog(logMessage);
+
+    sendDataToServerMongo(logMessage, "getLogs");
   }
 }
 
@@ -836,6 +846,8 @@ void handleChangeId(AsyncWebServerRequest *request) {
         AsyncWebParameter* p = request->getParam("newId", true);
         moduleName = p->value(); // Update the moduleName with the new value
         Serial.println("ID changed to: " + moduleName);
+        sendDataToServerMongo("module name is change to: " + moduleName , "getModuels");
+        sendDataToServerMongo("module name is change to: " + moduleName , "getLogs");
 
         // Save the new ID to NVS
         preferences.begin("alerm", false);
@@ -930,7 +942,8 @@ void makeApiRequest()
         {
           Serial.println("Triggering alarm...");
           ledIsOn();
-          sendLog("alerm active at " + moduleName + " in city:" + cityAlermLog);
+          sendDataToServerMongo("alerm active at " + moduleName + " in city:" + cityAlermLog,"getLogs");
+
         }
         else
         {
@@ -982,41 +995,7 @@ String getFormattedTime()
   return String(timeStringBuff);
 }
 
-void sendLog(String logMessage)
-{
-  String timestamp = getFormattedTime();
 
-  if (WiFi.status() == WL_CONNECTED)
-  {
-    HTTPClient http;
-    http.begin("https://logs-foem.onrender.com/api/logs");
-    http.addHeader("Content-Type", "application/json");
-
-    String requestBody = "{\"log\": \"" + logMessage + "\", \"timestamp\": \"" + timestamp + "\", \"macAddress\": \"" + macAddress + "\"}";
-    Serial.println("Request Body: " + requestBody);
-    int httpResponseCode = http.POST(requestBody);
-
-    if (httpResponseCode > 0)
-    {
-      Serial.print("HTTP Response code: ");
-      Serial.println(httpResponseCode);
-      String response = http.getString();
-      Serial.println("Response: " + response);
-    }
-    else
-    {
-      Serial.print("Error code: ");
-      Serial.println(httpResponseCode);
-      Serial.println("Error: " + http.errorToString(httpResponseCode));
-    }
-
-    http.end();
-  }
-  else
-  {
-    Serial.println("WiFi not connected");
-  }
-}
 void ledIsOn()
 {
   int blinkDurationInSeconds = 10;
@@ -1042,32 +1021,7 @@ void ledIsOn()
   }
 }
 
-void registerModule()
-{
-  IPAddress ip = WiFi.localIP();
 
-  if (WiFi.status() == WL_CONNECTED)
-  {
-
-    HTTPClient http;
-    http.begin("https://logs-foem.onrender.com/api/register");
-    http.addHeader("Content-Type", "application/json");
-    String requestBody = "{\"moduleName\": \"" + moduleName + "\", \"ipAddress\": \"" + ip.toString() + "\", \"macAddress\": \"" + macAddress + "\"}";
-
-    int httpResponseCode = http.POST(requestBody);
-
-    if (httpResponseCode == HTTP_CODE_OK)
-    {
-      Serial.println("Module registered successfully: " + moduleName);
-    }
-    else
-    {
-      Serial.println("Failed to register module: " + moduleName);
-      Serial.println("Error code: " + httpResponseCode);
-    }
-    http.end();
-  }
-}
 
 void PingTestWhitMacAddresses()
 {
@@ -1142,4 +1096,39 @@ void sendPongBack(const String &macAddress)
   }
 
   httpPong.end();
+}
+
+void sendDataToServerMongo(String log,String route) {
+    IPAddress ip = WiFi.localIP();
+    String sensorData="";
+  if(WiFi.status() == WL_CONNECTED) {
+    HTTPClient http;
+    String url = "https://logs-foem.onrender.com/api/" + route; 
+    http.begin(url.c_str()); 
+    http.addHeader("Content-Type", "application/json");
+
+    if(route =="getModuels"){
+             sensorData = "{\"macAddress\": \"" + macAddress + "\", \"timestamp\": \"" + getFormattedTime() + "\", \"moduleName\": \"" + moduleName + "\", \"log\": \"" + log + "\", \"ipAddress\": \"" + ip.toString() + "\"}";
+
+
+      }else if (route =="getLogs"){
+       sensorData = "{\"macAddress\": \"" + macAddress + "\", \"timestamp\": \"" + getFormattedTime() + "\", \"moduleName\": \"" + moduleName + "\", \"log\": \"" + log + "\"}";
+
+        }
+
+    int httpResponseCode = http.POST(sensorData);
+
+if(httpResponseCode == 200) {
+  String response = http.getString();
+  Serial.println("Server response: " + response);
+  // Optionally, parse the response if it contains JSON data indicating success
+} else {
+  Serial.print("Error on sending POST: ");
+  Serial.println(httpResponseCode);
+}
+
+    http.end();
+  } else {
+    Serial.println("WiFi not connected");
+  }
 }
