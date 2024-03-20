@@ -1,4 +1,3 @@
-
 #include <FastLED.h>
 #include <WiFi.h>
 #include <DNSServer.h>
@@ -29,6 +28,7 @@ String savedCitiesJson;
 String moduleName;
 String macAddress = WiFi.macAddress();
 String ipAddress = WiFi.localIP().toString();
+volatile bool shouldBeDeleted = false;
 
 Preferences preferences;
 WebServer server(90);
@@ -75,43 +75,30 @@ void setup()
 
   // Start the web server
 
-  serverAsyn.on("/", HTTP_GET, [](AsyncWebServerRequest * request)
-  {
-    handleRoot(request);
-  });
+  serverAsyn.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
+                { handleRoot(request); });
 
-  serverAsyn.on("/info", HTTP_GET, [](AsyncWebServerRequest * request) {
-    handleInfo(request);
-  });
+  serverAsyn.on("/info", HTTP_GET, [](AsyncWebServerRequest *request)
+                { handleInfo(request); });
 
-  serverAsyn.on("/test", HTTP_GET, [](AsyncWebServerRequest * request)
-  {
-    handleTest(request);
-  });
+  serverAsyn.on("/test", HTTP_GET, [](AsyncWebServerRequest *request)
+                { handleTest(request); });
 
-  serverAsyn.on("/save-new-cities", HTTP_POST, [](AsyncWebServerRequest * request) {
-  }, NULL, handleSaveCities);
+  serverAsyn.on(
+      "/save-new-cities", HTTP_POST, [](AsyncWebServerRequest *request) {}, NULL, handleSaveCities);
 
+  serverAsyn.on("/save-cities", HTTP_GET, [](AsyncWebServerRequest *request)
+                { handleDisplaySavedCities(request); });
 
-  serverAsyn.on("/save-cities", HTTP_GET, [](AsyncWebServerRequest * request)
-  {
-    handleDisplaySavedCities(request);
-  });
+  serverAsyn.on("/change-id", HTTP_POST, [](AsyncWebServerRequest *request)
+                { handleChangeId(request); });
 
-  serverAsyn.on("/change-id", HTTP_POST, [](AsyncWebServerRequest * request)
-  {
-    handleChangeId(request);
-  });
+  serverAsyn.on("/activateLed", HTTP_POST, [](AsyncWebServerRequest *request)
+                { ledIsOn(); });
 
-  serverAsyn.on("/activateLed", HTTP_POST, [](AsyncWebServerRequest * request)
-  {
-    ledIsOn();
-  });
-
-  serverAsyn.on("/resetDevice", HTTP_POST, [](AsyncWebServerRequest * request)
-  { delay(1000);
-    ESP.restart();
-  });
+  serverAsyn.on("/resetDevice", HTTP_POST, [](AsyncWebServerRequest *request)
+                { delay(1000);
+    ESP.restart(); });
 
   serverAsyn.begin();
   Serial.println("HTTP server started");
@@ -120,27 +107,36 @@ void setup()
   loadCitiesFromPreferences();
   PermanentUrl();
 
-
-  sendDataToServerMongo("module is connected " + moduleName , "getModuels");
-  sendDataToServerMongo("module is connected " + moduleName , "getLogs");
+  sendDataToServerMongo("module is connected " + moduleName, "getModuels");
+  sendDataToServerMongo("module is connected " + moduleName, "getLogs");
   String cities = "";
-  for (int i = 0; i < sizeof(targetCities) / sizeof(targetCities[0]); i++) {
+  for (int i = 0; i < sizeof(targetCities) / sizeof(targetCities[0]); i++)
+  {
     cities += targetCities[i];
-    if (i < sizeof(targetCities) / sizeof(int) - 1) {
+    if (i < sizeof(targetCities) / sizeof(int) - 1)
+    {
       cities += ", ";
     }
   }
   sendDataToServerMongo("tager cities for " + moduleName + " is: " + cities, "getLogs");
 
+  xTaskCreate(
+      connectionIndicatorTask, // Task function
+      "ConnectionIndicator",   // Name for debugging
+      8192,                    // Stack size (increased from 4096)
+      NULL,                    // Parameters to pass
+      1,                       // Task priority
+      NULL                     // Task handle
+  );
 }
 
 void loop()
 {
-  
+
   makeApiRequest();
   PingTestWhitMacAddresses();
+  //  conectionIndecator(macAddress);
 }
-
 
 // url to choose cities http://alerm.local/
 void PermanentUrl()
@@ -156,28 +152,32 @@ void PermanentUrl()
   }
 }
 
-
-void handleSaveCities(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+void handleSaveCities(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total)
+{
   static String bodyData; // Static to retain the value between calls
 
-  if (index == 0) {
+  if (index == 0)
+  {
     Serial.println("Receiving body data...");
     bodyData = ""; // Clear previous data
   }
 
   // Append current chunk to the bodyData string
-  for (size_t i = 0; i < len; i++) {
+  for (size_t i = 0; i < len; i++)
+  {
     bodyData += (char)data[i];
   }
 
   // Once the last chunk is received, process the entire body
-  if (index + len == total) {
+  if (index + len == total)
+  {
     Serial.println("Body received completely.");
     Serial.println(bodyData);
 
     DynamicJsonDocument doc(1024);
     DeserializationError error = deserializeJson(doc, bodyData);
-    if (error) {
+    if (error)
+    {
       Serial.println("Parsing JSON failed!");
       request->send(400, "text/plain", "Invalid JSON");
       return;
@@ -191,8 +191,10 @@ void handleSaveCities(AsyncWebServerRequest *request, uint8_t *data, size_t len,
     }
 
     size_t i = 0;
-    for (JsonVariant city : cities) {
-      if (i < (sizeof(targetCities) / sizeof(targetCities[0]))) {
+    for (JsonVariant city : cities)
+    {
+      if (i < (sizeof(targetCities) / sizeof(targetCities[0])))
+      {
         targetCities[i] = city.as<String>(); // Store city in the array
         Serial.println("City: " + targetCities[i]);
         i++;
@@ -203,7 +205,6 @@ void handleSaveCities(AsyncWebServerRequest *request, uint8_t *data, size_t len,
 
     request->send(200, "application/json", "{\"message\":\"Cities received and processed.\"}");
     String logMessage = "Target city change To: ";
-
 
     for (int i = 0; i < sizeof(targetCities) / sizeof(targetCities[0]); i++)
     {
@@ -216,11 +217,7 @@ void handleSaveCities(AsyncWebServerRequest *request, uint8_t *data, size_t len,
 
     logMessage += " for module: " + moduleName + " ";
     sendDataToServerMongo(logMessage, "getLogs");
-
-
-
   }
-
 }
 
 void saveCitiesToPreferences()
@@ -541,7 +538,8 @@ void handleTest(AsyncWebServerRequest *request)
   request->send(200, "text/html", htmlContent);
 }
 
-void handleRoot(AsyncWebServerRequest *request) {
+void handleRoot(AsyncWebServerRequest *request)
+{
 
   String htmlContent = R"(
 <!DOCTYPE html>
@@ -840,39 +838,44 @@ nav ul {
   request->send(200, "text/html", responseHtml);
 }
 
-void handleChangeId(AsyncWebServerRequest *request) {
-    // Check if the request has a parameter named "newId" in the request body (POST) or query string (GET)
-    if (request->hasParam("newId", true)) { // true for POST parameter
-        AsyncWebParameter* p = request->getParam("newId", true);
-        moduleName = p->value(); // Update the moduleName with the new value
-        Serial.println("ID changed to: " + moduleName);
-        sendDataToServerMongo("module name is change to: " + moduleName , "getModuels");
-        sendDataToServerMongo("module name is change to: " + moduleName , "getLogs");
+void handleChangeId(AsyncWebServerRequest *request)
+{
+  // Check if the request has a parameter named "newId" in the request body (POST) or query string (GET)
+  if (request->hasParam("newId", true))
+  { // true for POST parameter
+    AsyncWebParameter *p = request->getParam("newId", true);
+    moduleName = p->value(); // Update the moduleName with the new value
+    Serial.println("ID changed to: " + moduleName);
+    sendDataToServerMongo("module name is change to: " + moduleName, "getModuels");
+    sendDataToServerMongo("module name is change to: " + moduleName, "getLogs");
 
-        // Save the new ID to NVS
-        preferences.begin("alerm", false);
-        preferences.putString("moduleName", moduleName);
-        preferences.end();
+    // Save the new ID to NVS
+    preferences.begin("alerm", false);
+    preferences.putString("moduleName", moduleName);
+    preferences.end();
 
-        // Redirect back to the root page
-        request->redirect("/");
-    } else if (request->hasParam("newId", false)) { // false for GET parameter
-        AsyncWebParameter* p = request->getParam("newId", false);
-        moduleName = p->value(); // Update the moduleName with the new value
-        Serial.println("ID changed to: " + moduleName);
+    // Redirect back to the root page
+    request->redirect("/");
+  }
+  else if (request->hasParam("newId", false))
+  { // false for GET parameter
+    AsyncWebParameter *p = request->getParam("newId", false);
+    moduleName = p->value(); // Update the moduleName with the new value
+    Serial.println("ID changed to: " + moduleName);
 
-        // Save the new ID to NVS
-        preferences.begin("alerm", false);
-        preferences.putString("moduleName", moduleName);
-        preferences.end();
+    // Save the new ID to NVS
+    preferences.begin("alerm", false);
+    preferences.putString("moduleName", moduleName);
+    preferences.end();
 
-        // Redirect back to the root page
-        request->redirect("/");
-    } else {
-        request->send(400, "text/plain", "Bad Request: newId not provided");
-    }
+    // Redirect back to the root page
+    request->redirect("/");
+  }
+  else
+  {
+    request->send(400, "text/plain", "Bad Request: newId not provided");
+  }
 }
-
 
 void makeApiRequest()
 {
@@ -942,8 +945,7 @@ void makeApiRequest()
         {
           Serial.println("Triggering alarm...");
           ledIsOn();
-          sendDataToServerMongo("alerm active at " + moduleName + " in city:" + cityAlermLog,"getLogs");
-
+          sendDataToServerMongo("alerm active at " + moduleName + " in city:" + cityAlermLog, "getLogs");
         }
         else
         {
@@ -995,7 +997,6 @@ String getFormattedTime()
   return String(timeStringBuff);
 }
 
-
 void ledIsOn()
 {
   int blinkDurationInSeconds = 10;
@@ -1021,15 +1022,9 @@ void ledIsOn()
   }
 }
 
-
-
 void PingTestWhitMacAddresses()
 {
-  if (WiFi.status() != WL_CONNECTED)
-  {
-    Serial.println("Not connected to WiFi");
-    return;
-  }
+
   HTTPClient http;
   http.begin("https://logs-foem.onrender.com/api/pingModule");
   int httpResponseCode = http.GET();
@@ -1098,37 +1093,93 @@ void sendPongBack(const String &macAddress)
   httpPong.end();
 }
 
-void sendDataToServerMongo(String log,String route) {
-    IPAddress ip = WiFi.localIP();
-    String sensorData="";
-  if(WiFi.status() == WL_CONNECTED) {
+void conectionIndecator(const String &macAddress)
+{
+  WiFiClientSecure client;
+  client.setInsecure();
+  HTTPClient httpPong;
+  String url = "https://logs-foem.onrender.com/api/moduleIsConnectIndicator/" + macAddress;
+  httpPong.begin(url.c_str());
+  httpPong.addHeader("Content-Type", "application/json");
+
+  StaticJsonDocument<256> pongDoc;
+  pongDoc["message"] = true;
+  pongDoc["macAddress"] = macAddress;
+
+  String pongPayload;
+  serializeJson(pongDoc, pongPayload);
+  //    Serial.print(pongPayload);
+
+  int pongResponseCode = httpPong.POST(pongPayload);
+
+  if (pongResponseCode == HTTP_CODE_OK)
+  {
+    Serial.println("connected sent successfully.");
+  }
+  else
+  {
+    Serial.print("Error sending pong: ");
+    Serial.println(httpPong.errorToString(pongResponseCode));
+    Serial.println(pongResponseCode);
+  }
+
+  httpPong.end();
+}
+
+void sendDataToServerMongo(String log, String route)
+{
+  IPAddress ip = WiFi.localIP();
+  String sensorData = "";
+  if (WiFi.status() == WL_CONNECTED)
+  {
     HTTPClient http;
-    String url = "https://logs-foem.onrender.com/api/" + route; 
-    http.begin(url.c_str()); 
+    String url = "https://logs-foem.onrender.com/api/" + route;
+    http.begin(url.c_str());
     http.addHeader("Content-Type", "application/json");
 
-    if(route =="getModuels"){
-             sensorData = "{\"macAddress\": \"" + macAddress + "\", \"timestamp\": \"" + getFormattedTime() + "\", \"moduleName\": \"" + moduleName + "\", \"log\": \"" + log + "\", \"ipAddress\": \"" + ip.toString() + "\"}";
-
-
-      }else if (route =="getLogs"){
-       sensorData = "{\"macAddress\": \"" + macAddress + "\", \"timestamp\": \"" + getFormattedTime() + "\", \"moduleName\": \"" + moduleName + "\", \"log\": \"" + log + "\"}";
-
-        }
+    if (route == "getModuels")
+    {
+      sensorData = "{\"macAddress\": \"" + macAddress + "\", \"timestamp\": \"" + getFormattedTime() + "\", \"moduleName\": \"" + moduleName + "\", \"log\": \"" + log + "\", \"ipAddress\": \"" + ip.toString() + "\"}";
+    }
+    else if (route == "getLogs")
+    {
+      sensorData = "{\"macAddress\": \"" + macAddress + "\", \"timestamp\": \"" + getFormattedTime() + "\", \"moduleName\": \"" + moduleName + "\", \"log\": \"" + log + "\"}";
+    }
 
     int httpResponseCode = http.POST(sensorData);
 
-if(httpResponseCode == 200) {
-  String response = http.getString();
-  Serial.println("Server response: " + response);
-  // Optionally, parse the response if it contains JSON data indicating success
-} else {
-  Serial.print("Error on sending POST: ");
-  Serial.println(httpResponseCode);
-}
+    if (httpResponseCode == 200)
+    {
+      String response = http.getString();
+      Serial.println("Server response: " + response);
+      // Optionally, parse the response if it contains JSON data indicating success
+    }
+    else
+    {
+      Serial.print("Error on sending POST: ");
+      Serial.println(httpResponseCode);
+    }
 
     http.end();
-  } else {
-    Serial.println("WiFi not connected");
   }
+}
+void connectionIndicatorTask(void *pvParameters)
+{
+  while (1)
+  {
+    // Perform the connection indicator function
+    conectionIndecator(macAddress);
+
+    // Delay for a period
+    vTaskDelay(pdMS_TO_TICKS(20000));
+
+    // Check a condition to decide whether to exit the task
+    if (shouldBeDeleted)
+    {
+      break; // Exit the loop
+    }
+  }
+
+  // Clean up task resources before exiting
+  vTaskDelete(NULL);
 }
