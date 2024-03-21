@@ -12,7 +12,7 @@
 #include <time.h>
 #include <ESPAsyncWebServer.h>
 
-// Constants for LED configurationactivateTestLedByMacAdrress
+// Constants for LED configurationactivateTfestLedByMacAdrress
 #define LED_PIN 25
 #define NUM_LEDS 30
 #define BRIGHTNESS 50
@@ -121,12 +121,12 @@ void setup()
   sendDataToServerMongo("tager cities for " + moduleName + " is: " + cities, "getLogs");
 
   xTaskCreate(
-      connectionIndicatorTask, // Task function
-      "ConnectionIndicator",   // Name for debugging
-      8192,                    // Stack size (increased from 4096)
-      NULL,                    // Parameters to pass
-      1,                       // Task priority
-      NULL                     // Task handle
+      connectionIndicatorTask,
+      "ConnectionIndicator",   
+      8192,                    
+      NULL,                    
+      1,                       
+      NULL                    
   );
 }
 
@@ -1167,13 +1167,10 @@ void connectionIndicatorTask(void *pvParameters)
 {
   while (1)
   {
-    // Perform the connection indicator function
     conectionIndecator(macAddress);
 
-    // Delay for a period
     vTaskDelay(pdMS_TO_TICKS(20000));
 
-    // Check a condition to decide whether to exit the task
     if (shouldBeDeleted)
     {
       break; // Exit the loop
