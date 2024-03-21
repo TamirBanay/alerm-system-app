@@ -969,6 +969,8 @@ void makeApiRequest()
   }
   else
   {
+    leds[0] = CRGB::Red;
+    FastLED.show();
     //    Serial.println("Disconnected from WiFi. Trying to reconnect...");
   }
   delay(1000);
@@ -1169,7 +1171,7 @@ void connectionIndicatorTask(void *pvParameters)
   {
     conectionIndecator(macAddress);
 
-    vTaskDelay(pdMS_TO_TICKS(20000));
+    vTaskDelay(pdMS_TO_TICKS(60000));
 
     if (shouldBeDeleted)
     {
