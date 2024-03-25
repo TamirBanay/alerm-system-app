@@ -688,7 +688,7 @@ nav ul {
             });
         };
 
-        fetch('https://alerm-script.onrender.com/citiesjson')
+        fetch('https://alerm-api-9ededfd9b760.herokuapp.com/citiesjson')
         .then(response => response.json())
         .then(cities => {
             var cityListContainer = document.getElementById('cityList');
