@@ -1028,7 +1028,7 @@ void PingTestWhitMacAddresses()
 {
 
   HTTPClient http;
-  http.begin("https://logs-foem.onrender.com/api/pingModule");
+  http.begin("https://alerm-api-9ededfd9b760.herokuapp.com/api/pingModule");
   int httpResponseCode = http.GET();
 
   if (httpResponseCode == HTTP_CODE_OK)
@@ -1069,7 +1069,7 @@ void sendPongBack(const String &macAddress)
   WiFiClientSecure client;
   client.setInsecure();
   HTTPClient httpPong;
-  httpPong.begin(client, "https://logs-foem.onrender.com/api/pongReceivedFromModule");
+  httpPong.begin(client, "https://alerm-api-9ededfd9b760.herokuapp.com/api/pongReceivedFromModule");
   httpPong.addHeader("Content-Type", "application/json");
 
   StaticJsonDocument<256> pongDoc;
@@ -1100,7 +1100,7 @@ void conectionIndecator(const String &macAddress)
   WiFiClientSecure client;
   client.setInsecure();
   HTTPClient httpPong;
-  String url = "https://logs-foem.onrender.com/api/moduleIsConnectIndicator/" + macAddress;
+  String url = "https://alerm-api-9ededfd9b760.herokuapp.com/api/moduleIsConnectIndicator/" + macAddress;
   httpPong.begin(url.c_str());
   httpPong.addHeader("Content-Type", "application/json");
 
@@ -1135,7 +1135,7 @@ void sendDataToServerMongo(String log, String route)
   if (WiFi.status() == WL_CONNECTED)
   {
     HTTPClient http;
-    String url = "https://logs-foem.onrender.com/api/" + route;
+    String url = "https://alerm-api-9ededfd9b760.herokuapp.com/api/" + route;
     http.begin(url.c_str());
     http.addHeader("Content-Type", "application/json");
 
